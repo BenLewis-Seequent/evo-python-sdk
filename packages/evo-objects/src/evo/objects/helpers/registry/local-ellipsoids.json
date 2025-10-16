@@ -1,0 +1,26 @@
+{
+    "/objects/local-ellipsoids/1.3.0/local-ellipsoids.schema.json": {
+        "attributes": "ellipsoids.attributes",
+        "values": [
+            {
+                "columns": [
+                    "x",
+                    "y",
+                    "z"
+                ],
+                "values": "locations.coordinates"
+            },
+            {
+                "columns": [
+                    "dip_azimuth",
+                    "dip",
+                    "pitch",
+                    "major",
+                    "semi_major",
+                    "minor"
+                ],
+                "values": "ellipsoids.values"
+            }
+        ]
+    }
+}

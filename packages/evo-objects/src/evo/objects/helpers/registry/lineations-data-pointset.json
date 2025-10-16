@@ -1,0 +1,22 @@
+{
+    "/objects/lineations-data-pointset/1.3.0/lineations-data-pointset.schema.json": {
+        "attributes": "locations.attributes",
+        "values": [
+            {
+                "columns": [
+                    "x",
+                    "y",
+                    "z"
+                ],
+                "values": "locations.coordinates"
+            },
+            {
+                "columns": [
+                    "trend",
+                    "plunge"
+                ],
+                "values": "locations.lineations"
+            }
+        ]
+    }
+}

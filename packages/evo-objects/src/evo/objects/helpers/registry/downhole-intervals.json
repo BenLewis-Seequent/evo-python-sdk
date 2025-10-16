@@ -1,0 +1,45 @@
+{
+    "/objects/downhole-intervals/1.3.0/downhole-intervals.schema.json": {
+        "attributes": "attributes",
+        "values": [
+            {
+                "columns": [
+                    "hole_id"
+                ],
+                "values": "hole_id.values",
+                "table": "hole_id.table"
+            },
+            {
+                "columns": [
+                    "start_x",
+                    "start_y",
+                    "start_z"
+                ],
+                "values": "start.coordinates"
+            },
+            {
+                "columns": [
+                    "end_x",
+                    "end_y",
+                    "end_z"
+                ],
+                "values": "end.coordinates"
+            },
+            {
+                "columns": [
+                    "mid_x",
+                    "mid_y",
+                    "mid_z"
+                ],
+                "values": "mid_points.coordinates"
+            },
+            {
+                "columns": [
+                    "from",
+                    "to"
+                ],
+                "values": "from_to.intervals.start_and_end"
+            }
+        ]
+    }
+}
