@@ -21,7 +21,7 @@ try:
     import jmespath
     from jmespath.exceptions import JMESPathError
     from jmespath.parser import ParsedResult as UpstreamParsedResult
-    from jmespath.visitor import Options
+    from jmespath.visitor import Options, Visitor
 except ImportError:
     raise ImportError(
         "The 'jmespath' package is required for evo.json.jmespath. "
@@ -174,6 +174,20 @@ class ParsedResult(UpstreamParsedResult):
     def search(self, value: Any, options: Options | None = None) -> Any:
         return proxy(super().search(value, options))
 
+    def assign(self, document: Any, new_value: Any) -> Any:
+        """Assign a new value into the data at the location specified by the JMESPath expression.
+
+        This only supports a subset of JMESPath expressions that can be used for assignment.
+        """
+        interpreter = AssignInterpreter()
+        result = interpreter.visit(self.parsed, document)
+        if isinstance(result, AssignmentTargetDictEntry):
+            result.obj[result.key] = new_value
+        elif isinstance(result, AssignmentTargetListEntry):
+            result.obj[result.index] = new_value
+        else:
+            raise JMESPathError("Invalid assignment target")
+
 
 def compile(expression: str) -> ParsedResult:
     """Thin wrapper around jmespath.compile to return our own version of ParsedResult.
@@ -200,3 +214,68 @@ def search(expression: str, data: Any, options: Options | None = None) -> Any:
     :raises JMESPathError: If the expression is invalid.
     """
     return compile(expression).search(data, options=options)
+
+
+class AssignmentTargetDictEntry:
+    def __init__(self, key: str, obj: dict):
+        self.key = key
+        self.obj = obj
+
+    @property
+    def value(self) -> Any:
+        return self.obj.setdefault(self.key, {})
+
+
+class AssignmentTargetListEntry:
+    def __init__(self, index: int, obj: list):
+        self.index = index
+        self.obj = obj
+
+    @property
+    def value(self) -> Any:
+        try:
+            return self.obj[self.index]
+        except IndexError:
+            return None
+
+
+class AssignInterpreter(Visitor):
+    """A JMESPath visitor used for processing assignment operations.
+
+    This only supports a subset of JMESPath expressions that can be used for assignment.
+
+    This works by lazily evaluating field and index accesses, so that the last operation can be turned into an
+    assignment. If another operation is encountered after a field or index access, the value is evaluated at that
+    point.
+    """
+
+    def default_visit(self, node, *args, **kwargs):
+        raise NotImplementedError(node["type"])
+
+    @staticmethod
+    def _evaluate_value(value):
+        """Lazily evaluate the value if it's an assignment target."""
+        if isinstance(value, (AssignmentTargetDictEntry, AssignmentTargetListEntry)):
+            return value.value
+        else:
+            return value
+
+    def visit_field(self, node, value):
+        evaluated_value = self._evaluate_value(value)
+        if not isinstance(evaluated_value, dict):
+            return None
+        return AssignmentTargetDictEntry(node["value"], evaluated_value)
+
+    def visit_index(self, node, value):
+        evaluated_value = self._evaluate_value(value)
+        if not isinstance(evaluated_value, list):
+            return None
+        return AssignmentTargetListEntry(node["index"], evaluated_value)
+
+    def visit_subexpression(self, node, value):
+        result = value
+        for node in node["children"]:
+            result = self.visit(node, result)
+        return result
+
+    visit_index_expression = visit_subexpression

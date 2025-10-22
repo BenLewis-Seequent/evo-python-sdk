@@ -6,6 +6,10 @@
                 "columns": [
                     "hole_id"
                 ],
+                "table_formats": [
+                    "integer-array-1-int32",
+                    "integer-array-1-int64"
+                ],
                 "values": "hole_id.values",
                 "table": "hole_id.table"
             },
@@ -15,6 +19,9 @@
                     "start_y",
                     "start_z"
                 ],
+                "table_formats": [
+                    "float-array-3"
+                ],
                 "values": "start.coordinates"
             },
             {
@@ -22,6 +29,9 @@
                     "end_x",
                     "end_y",
                     "end_z"
+                ],
+                "table_formats": [
+                    "float-array-3"
                 ],
                 "values": "end.coordinates"
             },
@@ -31,12 +41,18 @@
                     "mid_y",
                     "mid_z"
                 ],
+                "table_formats": [
+                    "float-array-3"
+                ],
                 "values": "mid_points.coordinates"
             },
             {
                 "columns": [
                     "from",
                     "to"
+                ],
+                "table_formats": [
+                    "float-array-2"
                 ],
                 "values": "from_to.intervals.start_and_end"
             }

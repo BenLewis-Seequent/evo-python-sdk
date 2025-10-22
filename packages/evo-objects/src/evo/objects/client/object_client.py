@@ -82,6 +82,15 @@ class DownloadedObject:
         self._connector = connector
         self._cache = cache
 
+    def get_data_client(self):
+        from evo.objects.utils import ObjectDataClient
+
+        return ObjectDataClient(
+            environment=self._metadata.environment,
+            connector=self._connector,
+            cache=self._cache,
+        )
+
     @staticmethod
     async def from_reference(
         connector: APIConnector,
@@ -178,6 +187,42 @@ class DownloadedObject:
             connector=self._connector, metadata=self._metadata, urls_by_name=filtered_urls_by_name
         ):
             yield ctx
+
+    async def update(
+        self,
+        object_dict: dict,
+        check_for_conflict: bool = True,
+        request_timeout: int | float | tuple[int | float, int | float] | None = None,
+    ) -> ObjectMetadata:
+        """Update the geoscience object on the geoscience object service.
+
+        This will create a new version of the object with the updated payload.
+
+        If successful, the metadata on this instance will be updated to reflect the new version.
+
+        :param object_dict: The new payload to update the object with.
+        :param check_for_conflict: If True, and if a newer version of the object
+            exists on the server, the update will fail. If False, the update will always succeed, but may
+            overwrite changes made by others.
+        :param request_timeout: An optional timeout to use for API requests. See evo.common.APIConnector for details.
+        """
+
+        api = ObjectsApi(self._connector)
+
+        if "uuid" not in object_dict:
+            object_dict["uuid"] = self.metadata.id
+        elif object_dict["uuid"] != self.metadata.id:
+            raise ValueError("The object ID in the update payload does not match the current object ID")
+
+        result = await api.update_objects_by_id(
+            object_id=str(self.metadata.id),
+            org_id=str(self.metadata.environment.org_id),
+            workspace_id=str(self.metadata.environment.workspace_id),
+            update_geoscience_object=models.UpdateGeoscienceObject.model_validate(object_dict),
+            request_timeout=request_timeout,
+            if_match=self.metadata.version_id if check_for_conflict else None,
+        )
+        return parse.object_metadata(result, self.metadata.environment)
 
     if _LOADER_AVAILABLE:
         # Optional support for loading Parquet data using PyArrow.

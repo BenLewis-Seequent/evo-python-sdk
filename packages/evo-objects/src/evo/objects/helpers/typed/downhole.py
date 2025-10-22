@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import sys
+
 from evo.objects import DownloadedObject
 
-from ..geoscience_object import SimpleObject
+from ..geoscience_object import SingleDatasetObject
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 __all__ = [
     "DownholeIntervals",
 ]
 
 
-class DownholeIntervals(SimpleObject):
+class DownholeIntervals(SingleDatasetObject):
     """A GeoscienceObject representing downhole intervals."""
 
     @classmethod
-    def adapt(cls, obj: DownloadedObject) -> DownholeIntervals:
+    def adapt(cls, obj: DownloadedObject) -> Self:
         if obj.metadata.schema_id.classification != "objects/downhole-intervals":
             raise ValueError(f"Cannot adapt '{obj.metadata.schema_id.classification}' to {cls.__name__}")
 

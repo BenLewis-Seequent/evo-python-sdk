@@ -21,6 +21,7 @@ from evo.common.io.exceptions import DataExistsError
 from evo.common.utils import NoFeedback, PartialFeedback
 
 from ..io import _CACHE_SCOPE, ObjectDataUpload
+from .tables import KnownTableFormat
 
 try:
     import pyarrow as pa
@@ -124,10 +125,12 @@ class ObjectDataClient:
         )
         fb.progress(1)
 
-    def save_table(self, table: pa.Table) -> dict:
+    def save_table(self, table: pa.Table, known_format: KnownTableFormat | None = None) -> dict:
         """Save a pyarrow table to a file, returning the table info as a dictionary.
 
-        :param table: The pyarrow table to save.
+        :param table: The pyarrow table to save
+        :param known_format: An optional known format to use for saving the table. If not provided, the format will be
+            inferred from the table.
 
         :return: Information about the saved table.
 
@@ -136,21 +139,26 @@ class ObjectDataClient:
         """
         from .table_formats import get_known_format
 
-        known_format = get_known_format(table)
+        if known_format is None:
+            known_format = get_known_format(table)
         table_info = known_format.save_table(table=table, destination=self.cache_location)
         return table_info
 
-    async def upload_table(self, table: pa.Table, fb: IFeedback = NoFeedback) -> dict:
+    async def upload_table(
+        self, table: pa.Table, fb: IFeedback = NoFeedback, known_format: KnownTableFormat | None = None
+    ) -> dict:
         """Upload pyarrow table to the geoscience object service, returning a GO model of the uploaded data.
 
         :param table: The table to be uploaded.
         :param fb: A feedback object for tracking upload progress.
+        :param known_format: An optional known format to use for saving the table. If not provided, the format will be
+            inferred from the table.
 
         :return: A description of the uploaded data.
 
         :raises TableFormatError: If the table does not match a known format.
         """
-        table_info = self.save_table(table)
+        table_info = self.save_table(table, known_format)
         upload = ObjectDataUpload(connector=self._connector, environment=self._environment, name=table_info["data"])
         try:
             await upload.upload_from_cache(cache=self._cache, transport=self._connector.transport, fb=fb)
@@ -208,17 +216,21 @@ class ObjectDataClient:
             """
             return self.save_table(pa.Table.from_pandas(dataframe))
 
-        async def upload_dataframe(self, dataframe: pd.DataFrame, fb: IFeedback = NoFeedback) -> dict:
+        async def upload_dataframe(
+            self, dataframe: pd.DataFrame, fb: IFeedback = NoFeedback, known_format: KnownTableFormat | None = None
+        ) -> dict:
             """Upload pandas dataframe to the geoscience object service, returning a GO model of the uploaded data.
 
             :param dataframe: The pandas dataframe to be uploaded.
             :param fb: A feedback object for tracking upload progress.
+            :param known_format: An optional known format to use for saving the table. If not provided, the format will be
+                inferred from the table.
 
             :return: A description of the uploaded data.
 
             :raises TableFormatError: If the table does not match a known format.
             """
-            table_info = await self.upload_table(pa.Table.from_pandas(dataframe), fb=fb)
+            table_info = await self.upload_table(pa.Table.from_pandas(dataframe), known_format=known_format, fb=fb)
             return table_info
 
         async def download_dataframe(

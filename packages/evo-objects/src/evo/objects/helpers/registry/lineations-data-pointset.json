@@ -8,12 +8,18 @@
                     "y",
                     "z"
                 ],
+                "table_formats": [
+                    "float-array-3"
+                ],
                 "values": "locations.coordinates"
             },
             {
                 "columns": [
                     "trend",
                     "plunge"
+                ],
+                "table_formats": [
+                    "float-array-2"
                 ],
                 "values": "locations.lineations"
             }

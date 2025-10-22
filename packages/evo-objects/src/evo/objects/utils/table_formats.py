@@ -156,3 +156,21 @@ def get_known_format(table: pa.Table) -> KnownTableFormat:
     msg = f"Could not resolve Geoscience Object Schema for {actual_format.name}"
     logger.error(msg)
     raise TableFormatError(msg)
+
+
+def get_known_format_by_name(name: str) -> KnownTableFormat:
+    """Get the known table format with the specified name.
+
+    :param name: The name of the known table format to get.
+
+    :return: The known table format with the specified name.
+
+    :raises TableFormatError: If no known table format with the specified name exists.
+    """
+    for known_format in all_known_formats:
+        if known_format.name == name:
+            return known_format
+
+    msg = f"Unknown Table Format: {name}"
+    logger.error(msg)
+    raise TableFormatError(msg)

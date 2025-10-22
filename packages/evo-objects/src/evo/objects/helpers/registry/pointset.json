@@ -8,6 +8,9 @@
                     "y",
                     "z"
                 ],
+                "table_formats": [
+                    "float-array-3"
+                ],
                 "values": "locations.coordinates"
             }
         ]

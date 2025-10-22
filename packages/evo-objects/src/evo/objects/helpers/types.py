@@ -18,7 +18,7 @@ __all__ = [
     "BoundingBox",
     "CategoryAttribute",
     "ContinuousAttribute",
-    "DatasetLoaderSpec",
+    "DatasetAdapterSpec",
     "EpsgCode",
     "LookupTableInfo",
     "Nan",
@@ -27,7 +27,7 @@ __all__ = [
     "ObjectAttribute",
     "Point3d",
     "TableInfo",
-    "ValuesLoaderSpec",
+    "ValuesAdapterSpec",
 ]
 
 
@@ -78,15 +78,16 @@ class ContinuousAttribute(_BaseAttribute):
 ObjectAttribute: TypeAlias = CategoryAttribute | ContinuousAttribute
 
 
-class ValuesLoaderSpec(BaseModel):
+class ValuesAdapterSpec(BaseModel):
     columns: Annotated[list[str], Field(min_length=1)]
+    table_formats: Annotated[list[str], Field(min_length=1)]
     values: str
     table: str | None = None
     nan_values: str | None = None
 
 
-class DatasetLoaderSpec(BaseModel):
-    values: Annotated[list[ValuesLoaderSpec], Field(min_length=1)]
+class DatasetAdapterSpec(BaseModel):
+    values: Annotated[list[ValuesAdapterSpec], Field(min_length=1)]
     attributes: str
 
 
@@ -158,3 +159,19 @@ class BoundingBox(NamedTuple):
                     raise ValueError(f"Bounding box field '{field}' must be a float, got '{type(data[field])}'") from ve
 
         return cls(*_values())
+
+    @classmethod
+    def from_points(cls, x, y, z) -> BoundingBox:
+        """Create a BoundingBox that encompasses the given points."""
+        if not len(x) or not len(y) or not len(z):
+            # TODO how to generically no points?
+            raise ValueError("Input point lists must not be empty")
+
+        return cls(
+            min_x=x.min(),
+            min_y=y.min(),
+            min_z=z.min(),
+            max_x=x.max(),
+            max_y=y.max(),
+            max_z=z.max(),
+        )
