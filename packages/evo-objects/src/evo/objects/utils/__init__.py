@@ -23,7 +23,7 @@ except ImportError:
     DataFrame = None  # type: ignore
 
 from .data import ObjectDataClient
-from .table_formats import all_known_formats, get_known_format
+from .table_formats import all_known_formats, get_known_format, get_known_format_by_name
 from .tables import ArrowTableFormat, BaseTableFormat, KnownTableFormat
 
 # We _used_ to export Table and DataFrame from this package as custom protocols, but we are using the actual
@@ -38,4 +38,5 @@ __all__ = [
     "ObjectDataClient",
     "all_known_formats",
     "get_known_format",
+    "get_known_format_by_name",
 ]

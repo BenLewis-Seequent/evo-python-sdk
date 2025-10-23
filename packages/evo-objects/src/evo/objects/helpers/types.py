@@ -25,7 +25,10 @@ __all__ = [
     "NanCategorical",
     "NanContinuous",
     "ObjectAttribute",
-    "Point3d",
+    "Point3",
+    "Rotation",
+    "Size3d",
+    "Size3i",
     "TableInfo",
     "ValuesAdapterSpec",
 ]
@@ -113,12 +116,55 @@ class EpsgCode(int):
         return f"EPSG:{int(self)}"
 
 
-class Point3d(NamedTuple):
+class Point3(NamedTuple):
     """A 3D point defined by X, Y, and Z coordinates."""
 
     x: float
     y: float
     z: float
+
+    @classmethod
+    def from_iterable(cls, coords: Iterable[float]) -> Point3:
+        """Create a Point3 from an iterable of coordinates."""
+        coord_list = list(coords)
+        if len(coord_list) != 3:
+            raise ValueError(f"Expected 3 coordinates to create Point3, got {len(coord_list)}")
+
+        return cls(coord_list[0], coord_list[1], coord_list[2])
+
+
+class Size3d(NamedTuple):
+    """A 3D size defined by dx, dy, and dz dimensions."""
+
+    dx: float
+    dy: float
+    dz: float
+
+    @classmethod
+    def from_iterable(cls, sizes: Iterable[float]) -> Size3d:
+        """Create a Size3d from an iterable of sizes."""
+        size_list = list(sizes)
+        if len(size_list) != 3:
+            raise ValueError(f"Expected 3 sizes to create Size3d, got {len(size_list)}")
+
+        return cls(size_list[0], size_list[1], size_list[2])
+
+
+class Size3i(NamedTuple):
+    """A 3D size defined by nx, ny, and nz integer dimensions."""
+
+    nx: int
+    ny: int
+    nz: int
+
+    @classmethod
+    def from_iterable(cls, sizes: Iterable[int]) -> Size3i:
+        """Create a Size3i from an iterable of sizes."""
+        size_list = list(sizes)
+        if len(size_list) != 3:
+            raise ValueError(f"Expected 3 sizes to create Size3i, got {len(size_list)}")
+
+        return cls(size_list[0], size_list[1], size_list[2])
 
 
 class BoundingBox(NamedTuple):
@@ -132,14 +178,14 @@ class BoundingBox(NamedTuple):
     max_z: float
 
     @property
-    def min(self) -> Point3d:
+    def min(self) -> Point3:
         """The minimum point of the bounding box."""
-        return Point3d(self.min_x, self.min_y, self.min_z)
+        return Point3(self.min_x, self.min_y, self.min_z)
 
     @property
-    def max(self) -> Point3d:
+    def max(self) -> Point3:
         """The maximum point of the bounding box."""
-        return Point3d(self.max_x, self.max_y, self.max_z)
+        return Point3(self.max_x, self.max_y, self.max_z)
 
     def to_dict(self) -> dict:
         """Get the bounding box as a dictionary."""
@@ -175,3 +221,30 @@ class BoundingBox(NamedTuple):
             max_y=y.max(),
             max_z=z.max(),
         )
+
+
+class Rotation(NamedTuple):
+    """A rotation defined by dip, dip azimuth, and pitch angles."""
+
+    dip: float
+    dip_azimuth: float
+    pitch: float
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Rotation:
+        """Create a Rotation from a dictionary."""
+
+        def _values() -> Iterable[float]:
+            for field in cls._fields:
+                try:
+                    yield float(data[field])
+                except KeyError as ke:
+                    raise ValueError(f"Missing required rotation field '{field}'") from ke
+                except ValueError as ve:
+                    raise ValueError(f"Rotation field '{field}' must be a float, got '{type(data[field])}'") from ve
+
+        return cls(*_values())
+
+    def to_dict(self) -> dict:
+        """Get the rotation as a dictionary."""
+        return {field: getattr(self, field) for field in self._fields}

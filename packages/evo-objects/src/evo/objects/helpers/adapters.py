@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Sequence
+from typing import Sequence, TypeVar
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -9,10 +9,11 @@ from evo import jmespath
 
 from ..utils.table_formats import get_known_format_by_name
 from ..utils.tables import KnownTableFormat
-from .types import ArrayTableInfo, DatasetAdapterSpec, LookupTableInfo, Nan, ObjectAttribute
+from .types import ArrayTableInfo, LookupTableInfo, Nan, ObjectAttribute
 
 __all__ = [
     "AttributesAdapter",
+    "BaseAdapter",
     "DatasetAdapter",
     "ValuesAdapter",
 ]
@@ -23,12 +24,18 @@ _TA_NAN_VALUES = TypeAdapter(Nan)
 _TA_OBJECT_ATTRIBUTES = TypeAdapter(list[ObjectAttribute])
 
 
-class ValuesAdapter:
+class BaseAdapter:
+    def __init__(self, major_version: int) -> None:
+        self.major_version = major_version
+
+
+class ValuesAdapter(BaseAdapter):
     """Adapter to extract values-related information from a Geoscience Object JSON document using JMESPath expressions."""
 
     def __init__(
         self,
-        *column_names: str,
+        major_version: int,
+        column_names: list[str],
         table_formats: list[KnownTableFormat],
         values: str,
         table: str | None = None,
@@ -46,6 +53,7 @@ class ValuesAdapter:
             be treated as NaN (missing values) in the resulting DataFrame. If not provided, no
             additional NaN values will be considered beyond the defaults (null, NaN, etc.).
         """
+        super().__init__(major_version)
         self._column_names = tuple([str(name) for name in column_names])
         self._table_formats = table_formats
         self._values_path = jmespath.compile(values)
@@ -161,13 +169,15 @@ class ValuesAdapter:
             return None
 
 
-class AttributesAdapter:
+class AttributesAdapter(BaseAdapter):
     """Adapter to extract a list of object attributes from a Geoscience Object JSON document using a JMESPath expression."""
 
-    def __init__(self, *, path: str) -> None:
+    def __init__(self, major_version: int, path: str) -> None:
         """
+        :param major_version: The major version of the Geoscience Object Schema this adapter targets.
         :param path: JMESPath expression to locate the list of ObjectAttribute dicts.
         """
+        super().__init__(major_version)
         self._path = jmespath.compile(path)
 
     def get_attributes(self, document: Mapping) -> list[ObjectAttribute]:
@@ -211,7 +221,7 @@ class DatasetAdapter:
     def __init__(
         self,
         value_adapters: Sequence[ValuesAdapter],
-        attributes_adapter: AttributesAdapter,
+        attributes_adapter: AttributesAdapter | None,
     ) -> None:
         """
         :param value_adapters: A sequence of ValuesAdapter instances to extract values information.
@@ -220,19 +230,26 @@ class DatasetAdapter:
         self.value_adapters = tuple(value_adapters)
         self.attributes_adapter = attributes_adapter
 
-    @staticmethod
-    def from_spec(spec: DatasetAdapterSpec) -> DatasetAdapter:
-        """Create a DatasetAdapter from a spec"""
+    @classmethod
+    def from_adapter_lists(
+        cls, major_version: int, value_adapters: list[ValuesAdapter], attributes_adapters: list[AttributesAdapter]
+    ) -> DatasetAdapter:
+        attributes_adapters = _get_selected_adapters(major_version, attributes_adapters)
+        if len(attributes_adapters) > 1:
+            raise ValueError(f"Multiple AttributesAdapters found for schema version {major_version}")
+        value_adapters = _get_selected_adapters(major_version, value_adapters)
         return DatasetAdapter(
-            value_adapters=[
-                ValuesAdapter(
-                    *v.columns,
-                    values=v.values,
-                    table=v.table,
-                    nan_values=v.nan_values,
-                    table_formats=[get_known_format_by_name(table_format) for table_format in v.table_formats],
-                )
-                for v in spec.values
-            ],
-            attributes_adapter=AttributesAdapter(path=spec.attributes),
+            value_adapters,
+            attributes_adapters[0] if attributes_adapters else None,
         )
+
+
+_T = TypeVar("_T", bound=BaseAdapter)
+
+
+def _get_selected_adapters(major_version: int, candidate_adapters: list[_T]) -> list[_T]:
+    selected_adapters = []
+    for attribute_adapter in candidate_adapters:
+        if attribute_adapter.major_version == major_version:
+            selected_adapters.append(attribute_adapter)
+    return selected_adapters

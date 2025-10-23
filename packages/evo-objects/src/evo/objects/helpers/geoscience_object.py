@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import copy
 import sys
-from abc import ABC, abstractmethod
-from typing import Any
+import weakref
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 import pandas as pd
 
 from evo import jmespath
 from evo.common import APIConnector, Environment, ICache, IFeedback
 from evo.common.utils import NoFeedback
-from evo.objects import DownloadedObject, ObjectAPIClient, ObjectMetadata, ObjectReference
+from evo.objects import DownloadedObject, ObjectAPIClient, ObjectMetadata, ObjectReference, ObjectSchema, SchemaVersion
 from evo.objects.utils import ObjectDataClient
 
-from .adapters import DatasetAdapter
-from .registry import DatasetAdapterRegistry
+from .adapters import AttributesAdapter, DatasetAdapter, ValuesAdapter
 from .store import Dataset
 from .types import BoundingBox, EpsgCode
 
@@ -26,8 +26,58 @@ else:
 __all__ = ["BaseObject", "BaseSpatialObject", "SingleDatasetObject"]
 
 
-class BaseObject(ABC):
+@dataclass(kw_only=True)
+class EmbeddedData:
+    """Wrapper around data that is returned by as_dict() methods.
+
+    The data will be uploaded separately to the Geoscience Object Service when the Geoscience Object is created or
+    updated.
+    """
+
+    dataset_name: str
+    data: pd.DataFrame
+
+
+@dataclass(kw_only=True)
+class BaseObjectData:
+    name: str
+    description: str | None = None
+    tags: dict[str, str] | None = None
+    extensions: dict[str, Any] | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Convert to a dictionary that is suitable for creating a Geoscience Object.
+
+        The dictionary may contain instances of EmbeddedData, which indicate data that should be uploaded separately.
+        """
+        result: dict[str, Any] = {"name": self.name}
+        if self.description is not None:
+            result["description"] = self.description
+        if self.tags is not None:
+            result["tags"] = self.tags
+        if self.extensions is not None:
+            result["extensions"] = self.extensions
+        return result
+
+
+class BaseObject:
     """Base class for all Geoscience Objects."""
+
+    _sub_classification_lookup: ClassVar[weakref.WeakValueDictionary[str, type[BaseObject]]] = (
+        weakref.WeakValueDictionary()
+    )
+
+    sub_classification: ClassVar[str | None] = None
+    """The sub-classification of the Geoscience Object schema.
+    
+    If None, this class is considered abstract and cannot be instantiated directly.
+    """
+
+    creation_schema_version: ClassVar[SchemaVersion | None] = None
+    """The version of the Geoscience Object schema to use when creating new objects of this type.
+    
+    If None, this class can't create a new Geoscience Object, but can still load an existing one.
+    """
 
     def __init__(self, obj: DownloadedObject) -> None:
         """
@@ -37,28 +87,142 @@ class BaseObject(ABC):
         self._document = obj.as_dict()
 
     @classmethod
-    def _new_object_dict(
-        cls,
-        name: str,
-        description: str | None = None,
-        tags: dict[str, str] | None = None,
-        extensions: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Create a object dictionary suitable for creating a new Geoscience Object."""
-        object_dict = {
-            "uuid": None,
-            "name": name,
-        }
-        if description is not None:
-            object_dict["description"] = description
-        if tags is not None:
-            object_dict["tags"] = tags
-        if extensions is not None:
-            object_dict["extensions"] = extensions
-        return object_dict
+    def _construct_from_object(cls, obj: DownloadedObject) -> Self:
+        return cls(obj)
 
     @classmethod
-    @abstractmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__()
+        if cls.sub_classification is not None:
+            existing_cls = cls._sub_classification_lookup.get(cls.sub_classification)
+            if existing_cls is not None:
+                raise ValueError(
+                    f"Duplicate sub_classification '{cls.sub_classification}' for {cls.__name__}; "
+                    f"already registered by {existing_cls.__name__}"
+                )
+            cls._sub_classification_lookup[cls.sub_classification] = cls
+
+    @classmethod
+    async def _data_to_dict(cls, data: BaseObjectData, data_client: ObjectDataClient) -> dict[str, Any]:
+        """Convert the provided data to a dictionary suitable for creating a Geoscience Object.
+
+        :param data: The BaseObjectData to convert.
+        :return: The dictionary representation of the data.
+        """
+
+        if cls.sub_classification is None or cls.creation_schema_version is None:
+            raise NotImplementedError(
+                f"Class '{cls.__name__}' cannot create new objects; "
+                "sub_classification and creation_schema_version must be defined by the subclass"
+            )
+        result: dict[str, Any] = {
+            "schema": str(ObjectSchema("objects", cls.sub_classification, cls.creation_schema_version)),
+            "name": data.name,
+        }
+        if data.description is not None:
+            result["description"] = data.description
+        if data.tags is not None:
+            result["tags"] = data.tags
+        if data.extensions is not None:
+            result["extensions"] = data.extensions
+        return result
+
+    @classmethod
+    async def _create(
+        cls,
+        environment: Environment,
+        connector: APIConnector,
+        data: BaseObjectData,
+        parent: str | None = None,
+        cache: ICache | None = None,
+        request_timeout: float | None = None,
+    ) -> Self:
+        """Create a new object.
+
+        :param environment: The environment to use.
+        :param connector: The API connector to use.
+        :param data: The data that will be used to create the object.
+        :param parent: Optional parent path for the object.
+        :param cache: Optional cache to use.
+        :param request_timeout: Optional timeout for the request, in seconds.
+        """
+
+        client = ObjectAPIClient(
+            environment=environment,
+            connector=connector,
+            cache=cache,
+        )
+        data_client = ObjectDataClient(
+            environment=environment,
+            connector=connector,
+            cache=cache,
+        )
+
+        object_dict = await cls._data_to_dict(data, data_client)
+        object_dict["uuid"] = None  # New UUID is generated by the service
+
+        # TODO smarter implementation
+        path = parent + data.name + ".json" if parent else data.name + ".json"
+        metadata = await client.create_geoscience_object(
+            path=path,
+            object_dict=object_dict,
+            request_timeout=request_timeout,
+        )
+
+        # Need to perform a GET request to get the URLs required to download the data
+        obj = await DownloadedObject.from_reference(connector, metadata.url, cache, request_timeout)
+        return cls._construct_from_object(obj)
+
+    @classmethod
+    async def _replace(
+        cls,
+        environment: Environment,
+        connector: APIConnector,
+        reference: str,
+        data: BaseObjectData,
+        cache: ICache | None = None,
+        request_timeout: float | None = None,
+    ) -> Self:
+        """Replace an existing object.
+
+        :param environment: The environment to use.
+        :param connector: The API connector to use.
+        :param reference: The reference of the object to replace.
+        :param data: The data that will be used to create the object.
+        :param cache: Optional cache to use.
+        :param request_timeout: Optional timeout for the request, in seconds.
+        """
+
+        client = ObjectAPIClient(
+            environment=environment,
+            connector=connector,
+            cache=cache,
+        )
+        data_client = ObjectDataClient(
+            environment=environment,
+            connector=connector,
+            cache=cache,
+        )
+
+        object_dict = await cls._data_to_dict(data, data_client)
+        reference = ObjectReference(reference)
+        if reference.object_id is not None:
+            object_dict["uuid"] = reference.object_id
+        else:
+            # Need to perform a GET request to get the existing object's UUID
+            existing_obj = await DownloadedObject.from_reference(connector, reference, cache, request_timeout)
+            object_dict["uuid"] = existing_obj.metadata.id
+
+        metadata = await client.update_geoscience_object(
+            object_dict=object_dict,
+            request_timeout=request_timeout,
+        )
+
+        # Need to perform a GET request to get the URLs required to download the data
+        obj = await DownloadedObject.from_reference(connector, metadata.url, cache, request_timeout)
+        return cls._construct_from_object(obj)
+
+    @classmethod
     def adapt(cls, obj: DownloadedObject) -> Self:
         """Adapt a DownloadedObject to this GeoscienceObject type.
 
@@ -68,6 +232,16 @@ class BaseObject(ABC):
 
         :raises ValueError: If the DownloadedObject cannot be adapted to this GeoscienceObject type.
         """
+        selected_cls = cls._sub_classification_lookup.get(obj.metadata.schema_id.sub_classification)
+        if selected_cls is None:
+            raise ValueError(f"No class found for sub-classification '{obj.metadata.schema_id.sub_classification}'")
+
+        if not issubclass(selected_cls, cls):
+            raise ValueError(
+                f"Referenced object with sub-classification '{obj.metadata.schema_id.sub_classification}' "
+                f"cannot be adapted to '{cls.__name__}'"
+            )
+        return selected_cls._construct_from_object(obj)
 
     @classmethod
     async def from_reference(
@@ -181,36 +355,44 @@ class BaseObject(ABC):
         )
 
 
-class BaseSpatialObject(BaseObject, ABC):
+@dataclass(kw_only=True)
+class BaseSpatialObjectData(BaseObjectData):
+    # The bounding box cam be automatically derived from the data, but can also be provided explicitly
+    bounding_box: BoundingBox | None = None
+    coordinate_reference_system: EpsgCode | str | None = None
+
+    def get_bounding_box(self) -> BoundingBox:
+        """Get the bounding box for the object data.
+
+        If the bounding box is not explicitly provided, it will be derived from the data.
+
+        :return: The bounding box for the object data.
+
+        :raises ValueError: If the bounding box cannot be derived from the data.
+        """
+        if self.bounding_box is not None:
+            return self.bounding_box
+        else:
+            raise ValueError("Bounding box must be provided explicitly in BaseSpatialObjectData")
+
+
+class BaseSpatialObject(BaseObject):
     """Base class for all Geoscience Objects with spatial data."""
 
     @classmethod
-    def _new_object_dict(
-        cls,
-        name: str,
-        bounding_box: BoundingBox,
-        description: str | None = None,
-        tags: dict[str, str] | None = None,
-        extensions: dict[str, Any] | None = None,
-        coordinate_reference_system: EpsgCode | str | None = None,
-    ) -> dict[str, Any]:
+    async def _data_to_dict(cls, data: BaseSpatialObjectData, data_client: ObjectDataClient) -> dict[str, Any]:
         """Create a object dictionary suitable for creating a new Geoscience Object."""
-        object_dict = super()._new_object_dict(
-            name=name,
-            description=description,
-            tags=tags,
-            extensions=extensions,
-        )
-        if coordinate_reference_system is None:
+        object_dict = await super()._data_to_dict(data, data_client)
+        if data.coordinate_reference_system is None:
             object_dict["coordinate_reference_system"] = "unspecified"
-        if isinstance(coordinate_reference_system, EpsgCode):
-            object_dict["coordinate_reference_system"] = {"epsg_code": coordinate_reference_system.value}
-        elif isinstance(coordinate_reference_system, str):
-            object_dict["coordinate_reference_system"] = {"ogc_wkt": coordinate_reference_system}
+        if isinstance(data.coordinate_reference_system, EpsgCode):
+            object_dict["coordinate_reference_system"] = {"epsg_code": data.coordinate_reference_system}
+        elif isinstance(data.coordinate_reference_system, str):
+            object_dict["coordinate_reference_system"] = {"ogc_wkt": data.coordinate_reference_system}
         else:
             raise ValueError("coordinate_reference_system must be an EpsgCode, str, or None")
 
-        object_dict["bounding_box"] = bounding_box.to_dict()
+        object_dict["bounding_box"] = data.get_bounding_box().to_dict()
         return object_dict
 
     @property
@@ -239,9 +421,38 @@ class BaseSpatialObject(BaseObject, ABC):
         else:
             raise ValueError("Object does not contain a valid 'bounding_box' field")
 
+    @bounding_box.setter
+    def bounding_box(self, bounding_box: BoundingBox) -> None:
+        """Set the bounding box of the Geoscience Object.
+
+        :param bounding_box: The bounding box to set.
+        """
+        self._document["bounding_box"] = bounding_box.to_dict()
+
+
+@dataclass(kw_only=True)
+class SingleDatasetObjectData(BaseSpatialObjectData):
+    data: pd.DataFrame
+
 
 class SingleDatasetObject(BaseSpatialObject):
     """A Geoscience Object that can be represented in a single DataFrame."""
+
+    attributes_adapters: ClassVar[list[AttributesAdapter]] = []
+    """List of attribute adapters available for this object type.
+    
+    Only one adapter per major version should be listed.
+    """
+    value_adapters: ClassVar[list[ValuesAdapter]] = []
+    """List of value adapters available for this object type."""
+
+    @classmethod
+    def _get_dataset_adapter(cls, schema_id: ObjectSchema) -> DatasetAdapter:
+        return DatasetAdapter.from_adapter_lists(
+            schema_id.version.major,
+            cls.value_adapters,
+            cls.attributes_adapters,
+        )
 
     def __init__(
         self, obj: DownloadedObject, dataset_adapter: DatasetAdapter, data_client: ObjectDataClient | None = None
@@ -257,52 +468,28 @@ class SingleDatasetObject(BaseSpatialObject):
         self._reset_from_object()
 
     @classmethod
-    async def _create(
-        cls,
-        environment: Environment,
-        connector: APIConnector,
-        name: str,
-        object_dict: dict[str, Any],
-        parent: str | None = None,
-        cache: ICache | None = None,
-        request_timeout: float | None = None,
-    ) -> Self:
-        """Create a new object.
+    def _construct_from_object(cls, obj: DownloadedObject) -> Self:
+        if obj.metadata.schema_id.sub_classification != cls.sub_classification:
+            raise ValueError(f"Cannot adapt '{obj.metadata.schema_id.classification}' to {cls.__name__}")
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param name: The name of the object.
-        :param parent: Optional parent path for the object.
-        :param object_dict: The object dictionary, which must conform to the Geoscience Object Schema, for this object
-            type.
-        :param cache: Optional cache to use.
-        :param request_timeout: Optional timeout for the request, in seconds.
-        """
+        adapter = cls._get_dataset_adapter(obj.metadata.schema_id)
+        return cls(obj, adapter, obj.get_data_client())
 
-        client = ObjectAPIClient(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+    @classmethod
+    async def _data_to_dict(cls, data: SingleDatasetObjectData, data_client: ObjectDataClient) -> dict[str, Any]:
+        object_dict = await super()._data_to_dict(data, data_client)
+
+        # Populate the object with the provided data
+        dataset = Dataset(
+            document=object_dict,
+            dataset_adapter=cls._get_dataset_adapter(ObjectSchema.from_id(object_dict["schema"])),
+            data_client=data_client,
         )
+        await dataset.set_dataframe(data.data)
+        # Ensure the object_dict is updated with any changes made during set_dataframe
+        dataset.update_document()
 
-        data_client = ObjectDataClient(
-            environment=environment,
-            connector=connector,
-            cache=cache,
-        )
-
-        # TODO smarter implementation
-        path = parent + name + ".json" if parent else name + ".json"
-        metadata = await client.create_geoscience_object(
-            path=path,
-            object_dict=object_dict,
-            request_timeout=request_timeout,
-        )
-
-        # Need to perform a GET request to get the URLs required to download the data
-        obj = await DownloadedObject.from_reference(connector, metadata.url, cache, request_timeout)
-        adapter = DatasetAdapterRegistry.resolve_adapter(metadata.schema_id)
-        return cls(obj, adapter, data_client)
+        return object_dict
 
     def _reset_from_object(self) -> None:
         self._dataset = Dataset(
@@ -324,19 +511,6 @@ class SingleDatasetObject(BaseSpatialObject):
     @property
     def attributes(self):
         return self._dataset.attributes
-
-    @classmethod
-    def adapt(cls, obj: DownloadedObject) -> Self:
-        """Automatically create a GeoscienceObject using the appropriate ObjectLoader based on the object's schema ID.
-
-        :param obj: The DownloadedObject representing the Geoscience Object.
-
-        :return: A GeoscienceObject instance using the appropriate ObjectLoader.
-
-        :raises ValueError: If no ObjectLoader could be found for the object's schema ID.
-        """
-        adapter = DatasetAdapterRegistry.resolve_adapter(obj.metadata.schema_id)
-        return cls(obj, adapter, obj.get_data_client())
 
     async def as_dataframe(self, *keys: str, fb: IFeedback = NoFeedback) -> pd.DataFrame:
         """Load a DataFrame containing the object's base values and the values from the specified attributes.
@@ -366,6 +540,8 @@ class SingleDatasetObject(BaseSpatialObject):
 
         Any attributes that are not present in the DataFrame but exist on the object, will remain unchanged.
 
+        The non-attribute data in the DataFrame will be ignored.
+
         :param df: The DataFrame containing the attribute data to set on the object.
         :param fb: Optional feedback object to report progress.
         """
@@ -377,5 +553,119 @@ class SingleDatasetObject(BaseSpatialObject):
         If the object has yet to be created on the service, it will be created instead.
         """
         self.attributes.update_document()
+        await super().update()
+        self._reset_from_object()
+
+
+class ChildDataset:
+    def __init__(self, value_adapters: list[ValuesAdapter], attributes_adapters: list[AttributesAdapter]) -> None:
+        self.value_adapters = value_adapters
+        self.attributes_adapters = attributes_adapters
+        self.name = None
+
+    def __set_name__(self, owner: type[MultiDatasetObject], name: str):
+        self.name = name
+
+    def __get__(self, instance: MultiDatasetObject, owner: type[MultiDatasetObject]) -> Dataset | ChildDataset:
+        if instance is None:
+            return self
+        if self.name is None:
+            raise ValueError("ChildDataset name not set")
+        return instance.get_dataset_by_name(self.name)
+
+
+class MultiDatasetObject(BaseSpatialObject):
+    datasets: ClassVar[list[ChildDataset]] = []
+    """List of datasets available for this object type."""
+
+    @classmethod
+    def _get_dataset_adapters(cls, schema_id: ObjectSchema) -> dict[str, DatasetAdapter]:
+        return {
+            dataset_spec.name: DatasetAdapter.from_adapter_lists(
+                schema_id.version.major,
+                dataset_spec.value_adapters,
+                dataset_spec.attributes_adapters,
+            )
+            for dataset_spec in cls.datasets
+        }
+
+    @classmethod
+    async def _set_data(
+        cls, object_dict: dict[str, Any], data_client: ObjectDataClient, dataset_spec: ChildDataset, data: pd.DataFrame
+    ) -> None:
+        # Populate the object with the provided data
+        dataset_adapters = cls._get_dataset_adapters(ObjectSchema.from_id(object_dict["schema"]))
+        dataset_adapter = dataset_adapters[dataset_spec.name]
+        dataset = Dataset(
+            document=object_dict,
+            dataset_adapter=dataset_adapter,
+            data_client=data_client,
+        )
+        await dataset.set_dataframe(data)
+        # Ensure the object_dict is updated with any changes made during set_dataframe
+        dataset.update_document()
+
+    def __init__(
+        self,
+        obj: DownloadedObject,
+        dataset_adapters: dict[str, DatasetAdapter],
+        data_client: ObjectDataClient | None = None,
+    ) -> None:
+        """
+        :param obj: The DownloadedObject representing the Geoscience Object.
+        :param dataset_adapters: Set of DatasetAdapters for the Geoscience Object.
+        :param data_client: Optional ObjectDataClient to use for downloading data.
+        """
+        super().__init__(obj)
+        self._dataset_adapters = dataset_adapters
+        self._data_client = data_client
+        self._reset_from_object()
+
+    @classmethod
+    def _construct_from_object(cls, obj: DownloadedObject) -> Self:
+        if obj.metadata.schema_id.sub_classification != cls.sub_classification:
+            raise ValueError(f"Cannot adapt '{obj.metadata.schema_id.classification}' to {cls.__name__}")
+
+        adapters = cls._get_dataset_adapters(obj.metadata.schema_id)
+        return cls(obj, adapters, obj.get_data_client())
+
+    def _reset_from_object(self) -> None:
+        self._datasets = {
+            key: Dataset(
+                document=self._document,
+                dataset_adapter=adapter,
+                obj=self._obj,
+                data_client=self._data_client,
+            )
+            for key, adapter in self._dataset_adapters.items()
+        }
+
+    def get_dataset_by_name(self, name: str) -> Dataset:
+        """Get the dataset by its name.
+
+        :param name: The name of the dataset.
+
+        :return: The Dataset instance.
+
+        :raises KeyError: If the dataset with the specified name does not exist.
+        """
+        return self._datasets[name]
+
+    def as_dict(self) -> dict[str, Any]:
+        """Get the Geoscience Object as a dictionary.
+
+        :return: The Geoscience Object as a dictionary.
+        """
+        for dataset in self._datasets.values():
+            dataset.update_document()
+        return super().as_dict()
+
+    async def update(self):
+        """Update the object on the Geoscience Object Service.
+
+        If the object has yet to be created on the service, it will be created instead.
+        """
+        for dataset in self._datasets.values():
+            dataset.update_document()
         await super().update()
         self._reset_from_object()

@@ -65,6 +65,8 @@ class ValuesStore:
         if self._obj is None:
             raise ValueError("No object configured for downloading values")
 
+        if not self._loaders:
+            return pd.DataFrame()
         parts = [
             await loader.download_dataframe(self._obj, fb=fb_part)
             for loader, fb_part in iter_with_fb(self._loaders, fb)
@@ -105,7 +107,10 @@ class Dataset:
         self, document: dict, dataset_adapter, data_client: ObjectDataClient, obj: DownloadedObject | None = None
     ):
         self.values = ValuesStore(document, dataset_adapter.value_adapters, obj=obj, data_client=data_client)
-        self.attributes = Attributes(document, dataset_adapter.attributes_adapter, obj=obj, data_client=data_client)
+        if dataset_adapter.attributes_adapter is not None:
+            self.attributes = Attributes(document, dataset_adapter.attributes_adapter, obj=obj, data_client=data_client)
+        else:
+            self.attributes = None
 
     async def as_dataframe(self, *keys: str, fb: IFeedback = NoFeedback) -> pd.DataFrame:
         """Load a DataFrame containing the datasets base values and the values from the specified attributes.
@@ -119,6 +124,8 @@ class Dataset:
             ValuesAdapters and the attribute names.
         """
         values = await self.values.as_dataframe(fb=fb)
+        if self.attributes is None:
+            return values
         attributes = await self.attributes.as_dataframe(*keys, fb=fb)
         return pd.concat([values, attributes], axis=1)
 
@@ -142,7 +149,11 @@ class Dataset:
                 attribute_columns.append(column)
 
         await self.values.set_dataframe(df[value_columns], fb)
-        await self.attributes.set_attributes(df[attribute_columns], fb)
+        if self.attributes is None:
+            if attribute_columns:
+                raise ValueError("Cannot set attributes on a dataset without an attributes adapter")
+        else:
+            await self.attributes.set_attributes(df[attribute_columns], fb)
 
     async def update_attributes(self, df: pd.DataFrame, fb: IFeedback = NoFeedback) -> None:
         """Update or create attributes on the dataset from the provided DataFrame.
@@ -155,6 +166,8 @@ class Dataset:
         :param df: The DataFrame containing the attribute data to set on the object.
         :param fb: Optional feedback object to report progress.
         """
+        if self.attributes is None:
+            raise ValueError("Cannot set attributes on a dataset without an attributes adapter")
         attribute_columns = []
         for column in df.columns:
             if column not in self.values.column_names:
@@ -163,4 +176,5 @@ class Dataset:
 
     def update_document(self):
         """Update the underlying document with any changes made to the attributes."""
-        self.attributes.update_document()
+        if self.attributes is not None:
+            self.attributes.update_document()
