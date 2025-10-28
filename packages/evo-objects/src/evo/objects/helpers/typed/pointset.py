@@ -5,12 +5,13 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from evo.common import APIConnector, Environment, ICache, IFeedback
+from evo.common import IFeedback
 from evo.common.utils import NoFeedback
 from evo.objects import SchemaVersion
 from evo.objects.utils import get_known_format_by_name
 
 from ..adapters import AttributesAdapter, ValuesAdapter
+from ..evo_context import EvoContext
 from ..geoscience_object import SingleDatasetObject, SingleDatasetObjectData
 from ..types import BoundingBox
 
@@ -71,26 +72,20 @@ class PointSet(SingleDatasetObject):
     @classmethod
     async def create(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         data: PointSetData,
         parent: str | None = None,
     ) -> Self:
         """Create a new PointSet object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+
         :param data: The data for the PointSet object.
         :param parent: The parent path for the object.
 
         :return: The created PointSet object.
         """
         return await cls._create(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             parent=parent,
             data=data,
         )
@@ -98,26 +93,20 @@ class PointSet(SingleDatasetObject):
     @classmethod
     async def replace(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         reference: str,
         data: PointSetData,
     ) -> Self:
         """Replace an existing PointSet object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param reference: The reference of the object to replace.
         :param data: The data for the PointSet object.
 
         :return: The new version of the PointSet object.
         """
         return await cls._replace(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             reference=reference,
             data=data,
         )

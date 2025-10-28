@@ -82,14 +82,15 @@ class DownloadedObject:
         self._connector = connector
         self._cache = cache
 
-    def get_data_client(self):
-        from evo.objects.utils import ObjectDataClient
+    @property
+    def connector(self) -> APIConnector:
+        """The API connector used for downloading data."""
+        return self._connector
 
-        return ObjectDataClient(
-            environment=self._metadata.environment,
-            connector=self._connector,
-            cache=self._cache,
-        )
+    @property
+    def cache(self) -> ICache | None:
+        """The cache used for downloading data, if any."""
+        return self._cache
 
     @staticmethod
     async def from_reference(

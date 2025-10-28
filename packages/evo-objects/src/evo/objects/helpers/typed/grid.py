@@ -6,11 +6,11 @@ from typing import Any
 
 import pandas as pd
 
-from evo.common import APIConnector, Environment, ICache
 from evo.objects import SchemaVersion
 from evo.objects.utils import ObjectDataClient
 
 from ..adapters import AttributesAdapter
+from ..evo_context import EvoContext
 from ..geoscience_object import BaseSpatialObjectData, ChildDataset, MultiDatasetObject
 from ..types import BoundingBox, Point3, Rotation, Size3d, Size3i
 
@@ -95,26 +95,20 @@ class Regular3DGrid(MultiDatasetObject):
     @classmethod
     async def create(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         data: Regular3DGridData,
         parent: str | None = None,
     ) -> Self:
         """Create a new Regular3DGrid object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param data: The data for the Regular3DGrid object.
         :param parent: The parent path for the object.
 
         :return: The created Regular3DGrid object.
         """
         return await cls._create(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             parent=parent,
             data=data,
         )
@@ -122,26 +116,20 @@ class Regular3DGrid(MultiDatasetObject):
     @classmethod
     async def replace(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         reference: str,
         data: Regular3DGridData,
     ) -> Self:
         """Replace an existing Regular3DGrid object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param reference: The reference of the object to replace.
         :param data: The data for the Regular3DGrid object.
 
         :return: The new version of the Regular3DGrid object.
         """
         return await cls._replace(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             reference=reference,
             data=data,
         )

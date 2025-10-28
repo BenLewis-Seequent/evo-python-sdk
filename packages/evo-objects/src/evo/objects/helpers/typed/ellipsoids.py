@@ -4,12 +4,13 @@ import sys
 
 import pandas as pd
 
-from evo.common import APIConnector, Environment, ICache, IFeedback
+from evo.common import IFeedback
 from evo.common.utils import NoFeedback
 from evo.objects import SchemaVersion
 from evo.objects.utils import get_known_format_by_name
 
 from ..adapters import AttributesAdapter, ValuesAdapter
+from ..evo_context import EvoContext
 from ..geoscience_object import SingleDatasetObject, SingleDatasetObjectData
 from ..types import BoundingBox
 
@@ -91,26 +92,20 @@ class LocalEllipsoids(SingleDatasetObject):
     @classmethod
     async def create(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         data: LocalEllipsoidsData,
         parent: str | None = None,
     ) -> Self:
         """Create a new LocalEllipsoids object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param data: The data for the LocalEllipsoids object.
         :param parent: The parent path for the object.
 
         :return: The created PointSet object.
         """
         return await cls._create(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             parent=parent,
             data=data,
         )
@@ -118,26 +113,20 @@ class LocalEllipsoids(SingleDatasetObject):
     @classmethod
     async def replace(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         reference: str,
         data: LocalEllipsoidsData,
     ) -> Self:
         """Replace an existing LocalEllipsoids object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param reference: The reference of the object to replace.
         :param data: The data for the LocalEllipsoids object.
 
         :return: The new version of the LocalEllipsoids object.
         """
         return await cls._replace(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             reference=reference,
             data=data,
         )

@@ -4,12 +4,13 @@ import sys
 
 import pandas as pd
 
-from evo.common import APIConnector, Environment, ICache, IFeedback
+from evo.common import IFeedback
 from evo.common.utils import NoFeedback
 from evo.objects import SchemaVersion
 from evo.objects.utils import get_known_format_by_name
 
 from ..adapters import AttributesAdapter, ValuesAdapter
+from ..evo_context import EvoContext
 from ..geoscience_object import SingleDatasetObject, SingleDatasetObjectData
 from ..types import BoundingBox
 
@@ -119,53 +120,41 @@ class DownholeIntervals(SingleDatasetObject):
     @classmethod
     async def create(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         data: DownholeIntervalsData,
         parent: str | None = None,
     ) -> Self:
         """Create a new DownholeIntervals object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param data: The data for the DownholeIntervals object.
         :param parent: The parent path for the object.
 
         :return: The created DownholeIntervals object.
         """
         return await cls._create(
-            environment=environment,
-            connector=connector,
-            cache=cache,
-            parent=parent,
+            evo_context=evo_context,
             data=data,
+            parent=parent,
         )
 
     @classmethod
     async def replace(
         cls,
-        environment: Environment,
-        connector: APIConnector,
-        cache: ICache,
+        evo_context: EvoContext,
         reference: str,
         data: DownholeIntervalsData,
     ) -> Self:
         """Replace an existing DownholeIntervals object.
 
-        :param environment: The environment to use.
-        :param connector: The API connector to use.
-        :param cache: The cache to use.
+        :param evo_context: The context to use to call Evo APIs.
         :param reference: The reference of the object to replace.
         :param data: The data for the DownholeIntervals object.
 
         :return: The new version of the DownholeIntervals object.
         """
         return await cls._replace(
-            environment=environment,
-            connector=connector,
-            cache=cache,
+            evo_context=evo_context,
             reference=reference,
             data=data,
         )
