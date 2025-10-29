@@ -150,17 +150,7 @@ class BaseObject:
         return cls._construct_from_object(evo_context, obj)
 
     @classmethod
-    def adapt(cls, obj: DownloadedObject, *, evo_context: EvoContext | None = None) -> Self:
-        """Adapt a DownloadedObject to this GeoscienceObject type.
-
-        :param obj: The DownloadedObject representing the Geoscience Object.
-        :param evo_context: Optional EvoContext to use for the GeoscienceObject. If not provided, the context will be
-        derived from the DownloadedObject.
-
-        :return: A GeoscienceObject instance.
-
-        :raises ValueError: If the DownloadedObject cannot be adapted to this GeoscienceObject type.
-        """
+    def _adapt(cls, evo_context: EvoContext, obj: DownloadedObject) -> Self:
         selected_cls = cls._sub_classification_lookup.get(obj.metadata.schema_id.sub_classification)
         if selected_cls is None:
             raise ValueError(f"No class found for sub-classification '{obj.metadata.schema_id.sub_classification}'")
@@ -170,8 +160,6 @@ class BaseObject:
                 f"Referenced object with sub-classification '{obj.metadata.schema_id.sub_classification}' "
                 f"cannot be adapted to '{cls.__name__}'"
             )
-        if evo_context is None:
-            evo_context = EvoContext.from_downloaded_object(obj)
         return selected_cls._construct_from_object(evo_context, obj)
 
     @classmethod
@@ -196,7 +184,7 @@ class BaseObject:
             hub_url=reference.hub_url,
         )
         obj = await evo_context.download_geoscience_object(reference)
-        return cls.adapt(obj, evo_context=evo_context)
+        return cls._adapt(evo_context, obj)
 
     @property
     def metadata(self) -> ObjectMetadata:
@@ -281,9 +269,7 @@ class BaseObject:
 
     async def update(self):
         """Update the object on the geoscience object service"""
-        metadata = await self._obj.update(self._document)
-        # To get URL, so the data can be downloaded if needed
-        self._obj = await self._evo_context.download_geoscience_object(metadata.url)
+        self._obj = await self._obj.update(self._document)
 
 
 @dataclass(kw_only=True)

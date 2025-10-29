@@ -273,23 +273,12 @@ class EvoContext:
         )
 
     @classmethod
-    def from_downloaded_object(
-        cls,
-        downloaded_object: DownloadedObject,
-    ) -> "EvoContext":
-        return EvoContext.from_environment(
-            connector=downloaded_object.connector,
-            environment=downloaded_object.metadata.environment,
-            cache=downloaded_object.cache,
-        )
-
-    @classmethod
     def from_environment(
         cls,
         connector: APIConnector,
         environment: Environment,
         cache: ICache | None = None,
-    ) -> "EvoContext":
+    ) -> Self:
         return cls(
             connector=connector,
             cache=cache,

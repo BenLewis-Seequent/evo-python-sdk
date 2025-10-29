@@ -194,36 +194,51 @@ class DownloadedObject:
         object_dict: dict,
         check_for_conflict: bool = True,
         request_timeout: int | float | tuple[int | float, int | float] | None = None,
-    ) -> ObjectMetadata:
-        """Update the geoscience object on the geoscience object service.
+    ) -> DownloadedObject:
+        """Update the geoscience object on the geoscience object service. Returning a new DownloadedObject representing
+        the new version of the object.
 
-        This will create a new version of the object with the updated payload.
+        This will create a new version of the object, that fully replaces the existing properties of the object with
+        those provided in `object_dict`.
 
-        If successful, the metadata on this instance will be updated to reflect the new version.
+        Note, this will not update the "DownloadedObject" instance in-place - it will still represent the original
+        version of the object. You will need to download the updated version separately if you wish to work with it.
 
-        :param object_dict: The new payload to update the object with.
-        :param check_for_conflict: If True, and if a newer version of the object
-            exists on the server, the update will fail. If False, the update will always succeed, but may
-            overwrite changes made by others.
+        :param object_dict: The new properties of the object as a dictionary.
+        :param check_for_conflict: If True, and if a newer version of the object exists on the geoscience object
+            service, the update will fail with a ObjectModifiedError exception. If False, it will not check whether
+            there is a newer version, so will perform the update regardless.
         :param request_timeout: An optional timeout to use for API requests. See evo.common.APIConnector for details.
+
+        :returns: The new version of the object as a DownloadedObject.
         """
 
         api = ObjectsApi(self._connector)
 
         if "uuid" not in object_dict:
             object_dict["uuid"] = self.metadata.id
-        elif object_dict["uuid"] != self.metadata.id:
-            raise ValueError("The object ID in the update payload does not match the current object ID")
 
-        result = await api.update_objects_by_id(
+        model = models.UpdateGeoscienceObject.model_validate(object_dict)
+        if model.uuid != self.metadata.id:
+            raise ValueError("The object ID in the new object does not match the current object ID")
+
+        response = await api.update_objects_by_id(
             object_id=str(self.metadata.id),
             org_id=str(self.metadata.environment.org_id),
             workspace_id=str(self.metadata.environment.workspace_id),
-            update_geoscience_object=models.UpdateGeoscienceObject.model_validate(object_dict),
+            update_geoscience_object=model,
             request_timeout=request_timeout,
             if_match=self.metadata.version_id if check_for_conflict else None,
         )
-        return parse.object_metadata(result, self.metadata.environment)
+        metadata = parse.object_metadata(response, self.metadata.environment)
+        urls_by_name = {getattr(link, "name", link.id): link.download_url for link in response.links.data}
+        return DownloadedObject(
+            object_=response.object,
+            metadata=metadata,
+            urls_by_name=urls_by_name,
+            connector=self._connector,
+            cache=self._cache,
+        )
 
     if _LOADER_AVAILABLE:
         # Optional support for loading Parquet data using PyArrow.
