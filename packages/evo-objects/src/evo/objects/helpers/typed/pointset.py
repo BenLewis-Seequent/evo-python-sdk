@@ -8,7 +8,7 @@ import pandas as pd
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback
 from evo.objects import SchemaVersion
-from evo.objects.utils import get_known_format_by_name
+from evo.objects.utils.table_formats import BOOL_ARRAY_1, FLOAT_ARRAY_2, FLOAT_ARRAY_3
 
 from ..adapters import AttributesAdapter, ValuesAdapter
 from ..evo_context import EvoContext
@@ -63,7 +63,7 @@ class PointSet(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["x", "y", "z"],
-            table_formats=[get_known_format_by_name("float-array-3")],
+            table_formats=[FLOAT_ARRAY_3],
             values="locations.coordinates",
         )
     ]
@@ -78,7 +78,7 @@ class PointSet(SingleDatasetObject):
     ) -> Self:
         """Create a new PointSet object.
 
-
+        :param evo_context: The context to use to call Evo APIs.
         :param data: The data for the PointSet object.
         :param parent: The parent path for the object.
 
@@ -141,7 +141,7 @@ class PlanarDataPointSet(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["dip_azimuth", "dip"],
-            table_formats=[get_known_format_by_name("float-array-2")],
+            table_formats=[FLOAT_ARRAY_2],
             values="locations.plane_orientations",
         )
     ]
@@ -149,7 +149,7 @@ class PlanarDataPointSet(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["has_positive_polarity"],
-            table_formats=[get_known_format_by_name("bool-array-1")],
+            table_formats=[BOOL_ARRAY_1],
             values="locations.plane_polarity",
         )
     ]
@@ -174,7 +174,7 @@ class LineationsDataPointSet(PointSet):
         ValuesAdapter(
             major_version=1,
             column_names=["trend", "plunge"],
-            table_formats=[get_known_format_by_name("float-array-2")],
+            table_formats=[FLOAT_ARRAY_2],
             values="locations.lineations",
         )
     ]

@@ -7,10 +7,10 @@ import pandas as pd
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback, iter_with_fb
 from evo.objects import DownloadedObject
-from evo.objects.utils import ObjectDataClient
 
 from .adapters import ValuesAdapter
 from .attributes import Attributes
+from .evo_context import EvoContext
 from .loaders import ValuesLoader
 from .uploaders import CategoryValuesUploader, ValuesUploader
 
@@ -26,12 +26,12 @@ class ValuesStore:
         self,
         document: dict,
         value_adapters: Sequence[ValuesAdapter],
-        data_client: ObjectDataClient,
+        evo_context: EvoContext,
         obj: DownloadedObject | None = None,
     ):
         self._document = document
         self._obj = obj
-        self._data_client = data_client
+        self._evo_context = evo_context
         self._loaders = []
         self._uploaders = []
         self.column_names = []
@@ -81,11 +81,11 @@ class ValuesStore:
         """
         for adapter, uploader in self._uploaders:
             if isinstance(uploader, CategoryValuesUploader):
-                values_info, lookup_table_info = await uploader.upload_dataframe(self._data_client, df, fb=fb)
+                values_info, lookup_table_info = await uploader.upload_dataframe(self._evo_context, df, fb=fb)
                 adapter.set_values_info(self._document, values_info)
                 adapter.set_lookup_table_info(self._document, lookup_table_info)
             elif isinstance(uploader, ValuesUploader):
-                values_info = await uploader.upload_dataframe(self._data_client, df[list(adapter.column_names)], fb=fb)
+                values_info = await uploader.upload_dataframe(self._evo_context, df[list(adapter.column_names)], fb=fb)
                 adapter.set_values_info(self._document, values_info)
 
         # Clear the reference to the object after upload, as that is now stale
@@ -103,12 +103,10 @@ class Dataset:
     - a set of attributes, which defines custom values for each element in the dataset
     """
 
-    def __init__(
-        self, document: dict, dataset_adapter, data_client: ObjectDataClient, obj: DownloadedObject | None = None
-    ):
-        self.values = ValuesStore(document, dataset_adapter.value_adapters, obj=obj, data_client=data_client)
+    def __init__(self, document: dict, dataset_adapter, evo_context: EvoContext, obj: DownloadedObject | None = None):
+        self.values = ValuesStore(document, dataset_adapter.value_adapters, obj=obj, evo_context=evo_context)
         if dataset_adapter.attributes_adapter is not None:
-            self.attributes = Attributes(document, dataset_adapter.attributes_adapter, obj=obj, data_client=data_client)
+            self.attributes = Attributes(document, dataset_adapter.attributes_adapter, obj=obj, evo_context=evo_context)
         else:
             self.attributes = None
 

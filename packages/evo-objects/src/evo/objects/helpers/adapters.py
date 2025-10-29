@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Sequence, TypeVar
+from typing import Any, Sequence, TypeVar
 
 from pydantic import TypeAdapter, ValidationError
 
 from evo import jmespath
+from evo.objects.parquet import ArrayTableInfo, LookupTableInfo
 
-from ..utils.table_formats import get_known_format_by_name
+from ..utils.table_formats import LOOKUP_TABLE_INT32, LOOKUP_TABLE_INT64
 from ..utils.tables import KnownTableFormat
-from .types import ArrayTableInfo, LookupTableInfo, Nan, ObjectAttribute
+from .types import Nan, ObjectAttribute
 
 __all__ = [
     "AttributesAdapter",
@@ -27,6 +28,42 @@ _TA_OBJECT_ATTRIBUTES = TypeAdapter(list[ObjectAttribute])
 class BaseAdapter:
     def __init__(self, major_version: int) -> None:
         self.major_version = major_version
+
+
+class AdapterError(Exception):
+    """Custom exception for adapter-related errors."""
+
+
+def _extract_field_name(node: Any) -> str | None:
+    if node["type"] == "field":
+        return node["value"]
+    return None
+
+
+def _assign_jmespath_value(document: dict[str, Any], path: jmespath.ParsedResult, value: Any) -> None:
+    """Assign a value to a location in a document specified by a JMESPath expression.
+
+    This is very limited at the moment and only supports expressions like: `a.b.c`
+    """
+    node = path.parsed
+    field_name = _extract_field_name(node)
+    if field_name:
+        document[field_name] = value
+        return
+
+    if node["type"] != "subexpression":
+        raise AdapterError("Only subexpression paths are supported for assignment.")
+    children = node["children"]
+    for child in children[:-1]:
+        field_name = _extract_field_name(child)
+        if not field_name:
+            raise AdapterError("Unsupported JMESPath node type for assignment.")
+        document = document.setdefault(field_name, {})
+
+    last_field_name = _extract_field_name(children[-1])
+    if not last_field_name:
+        raise AdapterError("Unsupported JMESPath node type for assignment.")
+    document[last_field_name] = value
 
 
 class ValuesAdapter(BaseAdapter):
@@ -96,7 +133,7 @@ class ValuesAdapter(BaseAdapter):
         :param document: The JSON document (as a mapping) to set the values info in.
         :param values_info: The ArrayTableInfo dict to set.
         """
-        self._values_path.assign(document, values_info)
+        _assign_jmespath_value(document, self._values_path, values_info)
 
     @property
     def has_lookup_table(self) -> bool:
@@ -108,7 +145,7 @@ class ValuesAdapter(BaseAdapter):
         """Get the table formats that the lookup table is expected to be in."""
         if not self.has_lookup_table:
             return []
-        return [get_known_format_by_name("lookup-table-int32"), get_known_format_by_name("lookup-table-int64")]
+        return [LOOKUP_TABLE_INT32, LOOKUP_TABLE_INT64]
 
     def get_lookup_table_info(self, document: Mapping) -> LookupTableInfo | None:
         """Extract the LookupTableInfo for the lookup table from the given JSON document, if defined.
@@ -142,7 +179,7 @@ class ValuesAdapter(BaseAdapter):
         """
         if self._table_path is None:
             raise ValueError("This ValuesAdapter has no lookup table.")
-        self._table_path.assign(document, table_info)
+        _assign_jmespath_value(document, self._table_path, table_info)
 
     def get_nan_values(self, document: Mapping) -> Nan | None:
         """Extract the list of additional NaN values from the given JSON document, if defined.
@@ -212,7 +249,7 @@ class AttributesAdapter(BaseAdapter):
         :param document: The JSON document (as a mapping) to set the attributes in.
         :param attributes: The list of ObjectAttribute dicts to set.
         """
-        self._path.assign(document, attributes)
+        _assign_jmespath_value(document, self._path, attributes)
 
 
 class DatasetAdapter:

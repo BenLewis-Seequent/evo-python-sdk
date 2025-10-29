@@ -177,14 +177,30 @@ class ParsedResult(UpstreamParsedResult):
     def assign(self, document: Any, new_value: Any) -> Any:
         """Assign a new value into the data at the location specified by the JMESPath expression.
 
-        This only supports a subset of JMESPath expressions that can be used for assignment.
+        This only supports a subset of JMESPath expressions that can be used for assignment. In particular, only the following
+        expression types are supported:
+        - Field accesses (e.g. foo.bar)
+        - Index accesses (e.g. foo[0])
+        - Subexpressions combining the above (e.g. foo.bar[0].baz)
+        If the expression is not in that form, a JMESPathError will be raised.
+
+        Also, if the expression attempts to perform an invalid operation like:
+        - Accessing a field on a non-object
+        - Accessing an index on a non-array
+        - Accessing an out-of-bounds index on an array
+        then a JMESPathError will be raised.
+
+        Accessing a non-existent field on an object will create an empty object at that field to allow for nested assignments.
         """
-        interpreter = AssignInterpreter()
+        interpreter = _AssignInterpreter()
         result = interpreter.visit(self.parsed, document)
-        if isinstance(result, AssignmentTargetDictEntry):
+        if isinstance(result, _AssignmentTargetDictEntry):
             result.obj[result.key] = new_value
-        elif isinstance(result, AssignmentTargetListEntry):
-            result.obj[result.index] = new_value
+        elif isinstance(result, _AssignmentTargetListEntry):
+            try:
+                result.obj[result.index] = new_value
+            except KeyError:
+                raise JMESPathError("List index out of range") from None
         else:
             raise JMESPathError("Invalid assignment target")
 
@@ -216,30 +232,36 @@ def search(expression: str, data: Any, options: Options | None = None) -> Any:
     return compile(expression).search(data, options=options)
 
 
-class AssignmentTargetDictEntry:
+class _AssignmentTargetDictEntry:
+    """Represents a dictionary entry that potentially can be assigned to."""
+
     def __init__(self, key: str, obj: dict):
         self.key = key
         self.obj = obj
 
     @property
     def value(self) -> Any:
+        """Get the value at this dictionary entry, creating an empty dict if it doesn't exist."""
         return self.obj.setdefault(self.key, {})
 
 
-class AssignmentTargetListEntry:
+class _AssignmentTargetListEntry:
+    """Represents a list entry that potentially can be assigned to."""
+
     def __init__(self, index: int, obj: list):
         self.index = index
         self.obj = obj
 
     @property
     def value(self) -> Any:
+        """Get the value at this list entry, or None if the index is out of range."""
         try:
             return self.obj[self.index]
         except IndexError:
             return None
 
 
-class AssignInterpreter(Visitor):
+class _AssignInterpreter(Visitor):
     """A JMESPath visitor used for processing assignment operations.
 
     This only supports a subset of JMESPath expressions that can be used for assignment.
@@ -255,27 +277,31 @@ class AssignInterpreter(Visitor):
     @staticmethod
     def _evaluate_value(value):
         """Lazily evaluate the value if it's an assignment target."""
-        if isinstance(value, (AssignmentTargetDictEntry, AssignmentTargetListEntry)):
+        if isinstance(value, (_AssignmentTargetDictEntry, _AssignmentTargetListEntry)):
             return value.value
         else:
             return value
 
     def visit_field(self, node, value):
+        """Visit a field access node, i.e. foo.bar."""
         evaluated_value = self._evaluate_value(value)
         if not isinstance(evaluated_value, dict):
             return None
-        return AssignmentTargetDictEntry(node["value"], evaluated_value)
+        return _AssignmentTargetDictEntry(node["value"], evaluated_value)
 
     def visit_index(self, node, value):
+        """Visit an index access node, i.e. foo[0]."""
         evaluated_value = self._evaluate_value(value)
         if not isinstance(evaluated_value, list):
             return None
-        return AssignmentTargetListEntry(node["index"], evaluated_value)
+        return _AssignmentTargetListEntry(node["index"], evaluated_value)
 
-    def visit_subexpression(self, node, value):
+    def _visit_sub_or_index_expression(self, node, value):
+        """Visit a subexpression or index expression node, i.e. foo.bar.baz or a[0][1]."""
         result = value
         for node in node["children"]:
             result = self.visit(node, result)
         return result
 
-    visit_index_expression = visit_subexpression
+    visit_subexpression = _visit_sub_or_index_expression
+    visit_index_expression = _visit_sub_or_index_expression

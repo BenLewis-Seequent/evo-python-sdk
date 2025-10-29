@@ -7,7 +7,6 @@ from typing import Any
 import pandas as pd
 
 from evo.objects import SchemaVersion
-from evo.objects.utils import ObjectDataClient
 
 from ..adapters import AttributesAdapter
 from ..evo_context import EvoContext
@@ -76,8 +75,8 @@ class Regular3DGrid(MultiDatasetObject):
     datasets = [cells, vertices]
 
     @classmethod
-    async def _data_to_dict(cls, data: Regular3DGridData, data_client: ObjectDataClient) -> dict[str, Any]:
-        object_dict = await super()._data_to_dict(data, data_client)
+    async def _data_to_dict(cls, data: Regular3DGridData, evo_context: EvoContext) -> dict[str, Any]:
+        object_dict = await super()._data_to_dict(data, evo_context)
 
         object_dict["origin"] = list(data.origin)
         object_dict["size"] = list(data.size)
@@ -86,9 +85,9 @@ class Regular3DGrid(MultiDatasetObject):
             object_dict["rotation"] = data.rotation.to_dict()
 
         if data.cell_data is not None:
-            await cls._set_data(object_dict, data_client, cls.cells, data.cell_data)
+            await cls._set_data(object_dict, evo_context, cls.cells, data.cell_data)
         if data.vertex_data is not None:
-            await cls._set_data(object_dict, data_client, cls.vertices, data.vertex_data)
+            await cls._set_data(object_dict, evo_context, cls.vertices, data.vertex_data)
 
         return object_dict
 

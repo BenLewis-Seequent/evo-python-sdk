@@ -7,7 +7,7 @@ import pandas as pd
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback
 from evo.objects import SchemaVersion
-from evo.objects.utils import get_known_format_by_name
+from evo.objects.utils.table_formats import FLOAT_ARRAY_2, FLOAT_ARRAY_3, INTEGER_ARRAY_1_INT32, INTEGER_ARRAY_1_INT64
 
 from ..adapters import AttributesAdapter, ValuesAdapter
 from ..evo_context import EvoContext
@@ -76,8 +76,8 @@ class DownholeIntervals(SingleDatasetObject):
             major_version=1,
             column_names=["hole_id"],
             table_formats=[
-                get_known_format_by_name("integer-array-1-int32"),
-                get_known_format_by_name("integer-array-1-int64"),
+                INTEGER_ARRAY_1_INT32,
+                INTEGER_ARRAY_1_INT64,
             ],
             values="hole_id.values",
             table="hole_id.table",
@@ -87,7 +87,7 @@ class DownholeIntervals(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["start_x", "start_y", "start_z"],
-            table_formats=[get_known_format_by_name("float-array-3")],
+            table_formats=[FLOAT_ARRAY_3],
             values="start.coordinates",
         )
     ]
@@ -95,7 +95,7 @@ class DownholeIntervals(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["end_x", "end_y", "end_z"],
-            table_formats=[get_known_format_by_name("float-array-3")],
+            table_formats=[FLOAT_ARRAY_3],
             values="end.coordinates",
         )
     ]
@@ -103,7 +103,7 @@ class DownholeIntervals(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["mid_x", "mid_y", "mid_z"],
-            table_formats=[get_known_format_by_name("float-array-3")],
+            table_formats=[FLOAT_ARRAY_3],
             values="mid_points.coordinates",
         )
     ]
@@ -111,7 +111,7 @@ class DownholeIntervals(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["from", "to"],
-            table_formats=[get_known_format_by_name("float-array-2")],
+            table_formats=[FLOAT_ARRAY_2],
             values="from_to.intervals.start_and_end",
         )
     ]

@@ -1,15 +1,24 @@
 import sys
 import uuid
+from logging import getLogger
 from typing import Any, Mapping, overload
 
-from evo.common import APIConnector, Environment, IAuthorizer, ICache, ITransport
-from evo.objects import DownloadedObject, ObjectAPIClient, ObjectReference
-from evo.objects.utils import ObjectDataClient
+import pyarrow as pa
+
+from evo.common import APIConnector, Environment, IAuthorizer, ICache, IFeedback, ITransport
+from evo.common.io.exceptions import DataExistsError
+from evo.objects import DownloadedObject, ObjectAPIClient, ObjectDataUpload, ObjectReference
+from evo.objects.utils import KnownTableFormat
 
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
+
+
+logger = getLogger(__name__)
+
+_CACHE_SCOPE = "geoscience-object"
 
 
 class EvoContext:
@@ -194,10 +203,26 @@ class EvoContext:
                 f"Object's hub URL '{reference.hub_url}' does not match the context's hub URL '{self._hub_url}'."
             )
 
-    def get_data_client(self) -> ObjectDataClient:
+    async def upload_table(self, table: pa.Table, table_format: KnownTableFormat, fb: IFeedback) -> Any:
+        """Upload a table to the Geoscience Object Service, with the given format."""
+
         connector = self.get_connector()
         environment = self.get_environment()
-        return ObjectDataClient(environment, connector, cache=self._cache)
+
+        if self._cache is None:
+            # TODO Support in memory uploading, including streaming uploads
+            raise ValueError("Can't upload table without a cache. Please provide a cache in the EvoContext.")
+
+        destination = self._cache.get_location(environment=environment, scope=_CACHE_SCOPE)
+        table_info = table_format.save_table(table=table, destination=destination)
+
+        upload = ObjectDataUpload(connector=connector, environment=environment, name=table_info["data"])
+        try:
+            await upload.upload_from_cache(cache=self._cache, transport=self._connector.transport, fb=fb)
+        except DataExistsError:
+            logger.debug(f"Data not uploaded because data already exists (label: {table_info['data']})")
+            fb.progress(1)
+        return table_info
 
     async def create_geoscience_object(self, object_dict: dict[str, Any]) -> DownloadedObject:
         connector = self.get_connector()

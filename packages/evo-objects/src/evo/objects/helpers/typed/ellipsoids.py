@@ -7,7 +7,7 @@ import pandas as pd
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback
 from evo.objects import SchemaVersion
-from evo.objects.utils import get_known_format_by_name
+from evo.objects.utils.table_formats import FLOAT_ARRAY_3, FLOAT_ARRAY_6
 
 from ..adapters import AttributesAdapter, ValuesAdapter
 from ..evo_context import EvoContext
@@ -75,7 +75,7 @@ class LocalEllipsoids(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["x", "y", "z"],
-            table_formats=[get_known_format_by_name("float-array-3")],
+            table_formats=[FLOAT_ARRAY_3],
             values="locations.coordinates",
         )
     ]
@@ -83,7 +83,7 @@ class LocalEllipsoids(SingleDatasetObject):
         ValuesAdapter(
             major_version=1,
             column_names=["dip_azimuth", "dip", "pitch", "major", "semi_major", "minor"],
-            table_formats=[get_known_format_by_name("float-array-6")],
+            table_formats=[FLOAT_ARRAY_6],
             values="ellipsoids.values",
         )
     ]

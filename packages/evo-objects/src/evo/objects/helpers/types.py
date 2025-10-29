@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Iterable
-from typing import Annotated, Generic, NamedTuple, TypeAlias, TypeVar
+from typing import Generic, NamedTuple, TypeAlias, TypeVar
 
-from pydantic import BaseModel, Field
-
-from evo.objects.parquet.types import ArrayTableInfo, LookupTableInfo, TableInfo
+from evo.objects.parquet.types import ArrayTableInfo, LookupTableInfo
 
 if sys.version_info >= (3, 12):
     from typing import NotRequired, TypedDict
@@ -14,13 +12,10 @@ else:
     from typing_extensions import NotRequired, TypedDict
 
 __all__ = [
-    "ArrayTableInfo",
     "BoundingBox",
     "CategoryAttribute",
     "ContinuousAttribute",
-    "DatasetAdapterSpec",
     "EpsgCode",
-    "LookupTableInfo",
     "Nan",
     "NanCategorical",
     "NanContinuous",
@@ -29,8 +24,6 @@ __all__ = [
     "Rotation",
     "Size3d",
     "Size3i",
-    "TableInfo",
-    "ValuesAdapterSpec",
 ]
 
 
@@ -79,19 +72,6 @@ class ContinuousAttribute(_BaseAttribute):
 
 
 ObjectAttribute: TypeAlias = CategoryAttribute | ContinuousAttribute
-
-
-class ValuesAdapterSpec(BaseModel):
-    columns: Annotated[list[str], Field(min_length=1)]
-    table_formats: Annotated[list[str], Field(min_length=1)]
-    values: str
-    table: str | None = None
-    nan_values: str | None = None
-
-
-class DatasetAdapterSpec(BaseModel):
-    values: Annotated[list[ValuesAdapterSpec], Field(min_length=1)]
-    attributes: str
 
 
 class EpsgCode(int):

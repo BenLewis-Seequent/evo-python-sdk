@@ -7,9 +7,10 @@ import pyarrow as pa
 
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback
-from evo.objects.utils import ArrowTableFormat, KnownTableFormat, ObjectDataClient
+from evo.objects.parquet import ArrayTableInfo, LookupTableInfo
+from evo.objects.utils import ArrowTableFormat, KnownTableFormat
 
-from .types import ArrayTableInfo, LookupTableInfo
+from .evo_context import EvoContext
 
 
 def _get_format(expected_formats: list[KnownTableFormat], table: pa.Table) -> KnownTableFormat:
@@ -34,17 +35,17 @@ class ValuesUploader:
         self.formats = formats
 
     async def upload_dataframe(
-        self, data_client: ObjectDataClient, df: pd.DataFrame, fb: IFeedback = NoFeedback
+        self, evo_context: EvoContext, df: pd.DataFrame, fb: IFeedback = NoFeedback
     ) -> ArrayTableInfo:
         """Uploads a dataframe to the Geoscience Object Service.
-        :param data_client: The data client to use for uploading.
+        :param evo_context: The context to use for uploading data to the Geoscience Object Service.
         :param df: The dataframe to upload.
         :param fb: Feedback interface for reporting progress.
         :return: Information about the uploaded table.
         """
         table = pa.Table.from_pandas(df)
         known_format = _get_format(self.formats, table)
-        return cast(ArrayTableInfo, await data_client.upload_table(table, known_format=known_format, fb=fb))
+        return cast(ArrayTableInfo, await evo_context.upload_table(table, table_format=known_format, fb=fb))
 
 
 class CategoryValuesUploader:
@@ -62,10 +63,10 @@ class CategoryValuesUploader:
         self.lookup_table_formats = lookup_table_formats
 
     async def upload_dataframe(
-        self, data_client: ObjectDataClient, df: pd.DataFrame, fb: IFeedback = NoFeedback
+        self, evo_context: EvoContext, df: pd.DataFrame, fb: IFeedback = NoFeedback
     ) -> tuple[ArrayTableInfo, LookupTableInfo]:
         """Uploads a dataframe to the Geoscience Object Service.
-        :param data_client: The data client to use for uploading.
+        :param evo_context: The context to use for uploading data to the Geoscience Object Service.
         :param df: The dataframe to upload.
         :param fb: Feedback interface for reporting progress.
         :return: Information about the uploaded table.
@@ -73,12 +74,12 @@ class CategoryValuesUploader:
         series = df.iloc[:, 0]
         codes = pa.Table.from_pandas(pd.DataFrame(series.cat.codes))
         codes_format = _get_format(self.codes_formats, codes)
-        codes_info = cast(ArrayTableInfo, await data_client.upload_table(codes, known_format=codes_format, fb=fb))
+        codes_info = cast(ArrayTableInfo, await evo_context.upload_table(codes, table_format=codes_format, fb=fb))
 
         lookup_table = pa.Table.from_pandas(pd.DataFrame(series.cat.categories).reset_index())
         lookup_table_format = _get_format(self.lookup_table_formats, lookup_table)
         lookup_info = cast(
-            LookupTableInfo, await data_client.upload_table(lookup_table, known_format=lookup_table_format, fb=fb)
+            LookupTableInfo, await evo_context.upload_table(lookup_table, table_format=lookup_table_format, fb=fb)
         )
 
         return codes_info, lookup_info

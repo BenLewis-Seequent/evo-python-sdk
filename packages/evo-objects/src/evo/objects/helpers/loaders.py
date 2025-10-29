@@ -8,8 +8,9 @@ from evo import jmespath
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback, PartialFeedback
 from evo.objects import DownloadedObject
+from evo.objects.parquet import ArrayTableInfo, LookupTableInfo
 
-from .types import ArrayTableInfo, LookupTableInfo, Nan, ObjectAttribute
+from .types import Nan, ObjectAttribute
 
 __all__ = [
     "AttributeLoader",

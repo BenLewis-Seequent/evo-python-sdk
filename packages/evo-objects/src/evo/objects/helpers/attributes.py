@@ -9,10 +9,18 @@ import pandas as pd
 from evo.common import IFeedback
 from evo.common.utils import NoFeedback, iter_with_fb
 from evo.objects import DownloadedObject
-from evo.objects.utils import ObjectDataClient
-from evo.objects.utils.table_formats import get_known_format_by_name
+from evo.objects.utils.table_formats import (
+    BOOL_ARRAY_1,
+    FLOAT_ARRAY_1,
+    INTEGER_ARRAY_1_INT32,
+    INTEGER_ARRAY_1_INT64,
+    LOOKUP_TABLE_INT32,
+    LOOKUP_TABLE_INT64,
+    STRING_ARRAY,
+)
 
 from .adapters import AttributesAdapter
+from .evo_context import EvoContext
 from .loaders import AttributeLoader
 from .types import ObjectAttribute
 from .uploaders import CategoryValuesUploader, ValuesUploader
@@ -42,16 +50,14 @@ def _infer_attribute_type_from_series(series: pd.Series) -> str:
 
 
 _uploader_for_attribute_type = {
-    "scalar": ValuesUploader([get_known_format_by_name("float-array-1")]),
-    "integer": ValuesUploader(
-        [get_known_format_by_name("integer-array-1-int32"), get_known_format_by_name("integer-array-1-int64")]
-    ),
-    "bool": ValuesUploader([get_known_format_by_name("bool-array-1")]),
+    "scalar": ValuesUploader([FLOAT_ARRAY_1]),
+    "integer": ValuesUploader([INTEGER_ARRAY_1_INT32, INTEGER_ARRAY_1_INT64]),
+    "bool": ValuesUploader([BOOL_ARRAY_1]),
     "category": CategoryValuesUploader(
-        [get_known_format_by_name("integer-array-1-int32"), get_known_format_by_name("integer-array-1-int64")],
-        [get_known_format_by_name("lookup-table-int32"), get_known_format_by_name("lookup-table-int64")],
+        [INTEGER_ARRAY_1_INT32, INTEGER_ARRAY_1_INT64],
+        [LOOKUP_TABLE_INT32, LOOKUP_TABLE_INT64],
     ),
-    "string": ValuesUploader([get_known_format_by_name("string-array")]),
+    "string": ValuesUploader([STRING_ARRAY]),
 }
 
 
@@ -60,7 +66,7 @@ async def _upload_attribute_dataframe(
     key: str,
     attribute_type: str,
     series: pd.Series,
-    data_client: ObjectDataClient,
+    evo_context: EvoContext,
     fb: IFeedback = NoFeedback,
 ) -> ObjectAttribute:
     """Upload a DataFrame as an attribute.
@@ -77,9 +83,9 @@ async def _upload_attribute_dataframe(
         raise ValueError(f"Unsupported attribute type: {attribute_type}")
 
     if isinstance(uploader, ValuesUploader):
-        attribute["values"] = await uploader.upload_dataframe(data_client, pd.DataFrame(series), fb)
+        attribute["values"] = await uploader.upload_dataframe(evo_context, pd.DataFrame(series), fb)
     elif isinstance(uploader, CategoryValuesUploader):
-        values, lookup_table = await uploader.upload_dataframe(data_client, pd.DataFrame(series), fb)
+        values, lookup_table = await uploader.upload_dataframe(evo_context, pd.DataFrame(series), fb)
         attribute["values"] = values
         attribute["table"] = lookup_table
     else:
@@ -101,7 +107,7 @@ class Attribute:
     def __init__(
         self,
         attribute: ObjectAttribute,
-        data_client: ObjectDataClient,
+        evo_context: EvoContext,
         obj: DownloadedObject | None = None,
         loader: AttributeLoader | None = None,
     ) -> None:
@@ -110,7 +116,7 @@ class Attribute:
         :param loader: The AttributeLoader for the attribute.
         """
         self._attribute = attribute
-        self._data_client = data_client
+        self._evo_context = evo_context
         self._obj = obj
         self._loader = loader
 
@@ -174,7 +180,7 @@ class Attribute:
                 key=self.key,
                 attribute_type=attribute_type,
                 series=df.iloc[:, 0],
-                data_client=self._data_client,
+                evo_context=self._evo_context,
                 fb=fb,
             )
         )
@@ -197,24 +203,24 @@ class Attributes(Sequence[Attribute]):
         self,
         document: dict,
         attribute_adapter: AttributesAdapter,
-        data_client: ObjectDataClient,
+        evo_context: EvoContext,
         obj: DownloadedObject | None = None,
     ) -> None:
         """
         :param document: The document containing the attributes.
         :param attribute_adapter: The AttributesAdapter to extract attributes from the document.
-        :param data_client: The ObjectDataClient to use for uploading data.
+        :param evo_context: The context for uploading data to the Geoscience Object Service.
         :param obj: The DownloadedObject, representing the object containing the attributes.
         """
         self._document = document
         self._attribute_adapter = attribute_adapter
-        self._data_client = data_client
+        self._evo_context = evo_context
 
         attribute_list = attribute_adapter.get_attributes(document)
         if obj is None:
-            self._attributes = [Attribute(attr, data_client) for attr in attribute_list]
+            self._attributes = [Attribute(attr, evo_context) for attr in attribute_list]
         else:
-            self._attributes = [Attribute(attr, data_client, obj, AttributeLoader(attr)) for attr in attribute_list]
+            self._attributes = [Attribute(attr, evo_context, obj, AttributeLoader(attr)) for attr in attribute_list]
 
     def __getitem__(self, index: int) -> Attribute:
         return self._attributes[index]
@@ -254,10 +260,10 @@ class Attributes(Sequence[Attribute]):
             key=str(uuid.uuid4()),
             attribute_type=attribute_type,
             series=df.iloc[:, 0],
-            data_client=self._data_client,
+            evo_context=self._evo_context,
             fb=fb,
         )
-        self._attributes.append(Attribute(attribute, self._data_client))
+        self._attributes.append(Attribute(attribute, self._evo_context))
 
     async def append_attributes(self, df: pd.DataFrame, fb: IFeedback = NoFeedback):
         """Add a new attribute to the object.
