@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from types import MappingProxyType
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, Generic, TypeAlias, TypeVar, overload
 from uuid import UUID
 
 try:
@@ -29,6 +29,7 @@ except ImportError:
     ) from None
 
 __all__ = [
+    "JMESPath",
     "JMESPathArrayProxy",
     "JMESPathError",
     "JMESPathObjectProxy",
@@ -40,6 +41,15 @@ __all__ = [
 ]
 
 T = TypeVar("T")
+
+
+class ParsedResult(UpstreamParsedResult):
+    def search(self, value: Any, options: Options | None = None) -> Any:
+        return proxy(super().search(value, options))
+
+
+# Input type for JMESPath searches
+JMESPath: TypeAlias = ParsedResult | str
 
 
 class _JMESPathViewEncoder(json.JSONEncoder):
@@ -61,10 +71,11 @@ class _JMESPathProxyMixin(Generic[T]):
     def raw(self) -> T:
         return self._data
 
-    def search(self, expression: str) -> Any:
+    def search(self, expression: JMESPath) -> Any:
         """Search the proxied data with a JMESPath expression.
 
-        :param expression: The JMESPath expression to compile and search.
+        :param expression: The JMESPath expression used to search. Can be a string which will be compiled, or a
+            pre-compiled ParsedResult.
 
         :return: The result of the search, as JMESArrayProxy, JMESObjectProxy, or a primitive type.
 
@@ -218,10 +229,11 @@ def compile(expression: str) -> ParsedResult:
     return ParsedResult(result.expression, result.parsed)
 
 
-def search(expression: str, data: Any, options: Options | None = None) -> Any:
+def search(expression: JMESPath, data: Any, options: Options | None = None) -> Any:
     """Reimplementation of jmespath.search that returns our proxy types for JSON results.
 
-    :param expression: The JMESPath expression to compile.
+    :param expression: The JMESPath expression used to search. Can be a string which will be compiled, or a pre-compiled
+        ParsedResult.
     :param data: The data to search.
     :param options: Optional jmespath Options.
 
@@ -229,7 +241,9 @@ def search(expression: str, data: Any, options: Options | None = None) -> Any:
 
     :raises JMESPathError: If the expression is invalid.
     """
-    return compile(expression).search(data, options=options)
+    if not isinstance(expression, ParsedResult):
+        expression = compile(expression)
+    return expression.search(data, options=options)
 
 
 class _AssignmentTargetDictEntry:

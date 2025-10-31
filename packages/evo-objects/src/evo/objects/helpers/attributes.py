@@ -21,7 +21,6 @@ from evo.objects.utils.table_formats import (
 
 from .adapters import AttributesAdapter
 from .evo_context import EvoContext
-from .loaders import AttributeLoader
 from .types import ObjectAttribute
 from .uploaders import CategoryValuesUploader, ValuesUploader
 
@@ -109,16 +108,13 @@ class Attribute:
         attribute: ObjectAttribute,
         evo_context: EvoContext,
         obj: DownloadedObject | None = None,
-        loader: AttributeLoader | None = None,
     ) -> None:
         """
         :param obj: The DownloadedObject containing the attribute.
-        :param loader: The AttributeLoader for the attribute.
         """
         self._attribute = attribute
         self._evo_context = evo_context
         self._obj = obj
-        self._loader = loader
 
         if self._loader is not None and self._obj is None:
             raise ValueError("An AttributeLoader requires a DownloadedObject.")
@@ -155,9 +151,9 @@ class Attribute:
         :return: The loaded DataFrame with values for this attribute, applying lookup table and NaN values as specified.
             The column name will be updated to match the attribute name.
         """
-        if self._loader is None:
+        if self._obj is None:
             raise ValueError("Can't load attribute values without a loader.")
-        return await self._loader.download_dataframe(self._obj, fb=fb)
+        return await self._obj.download_attribute_dataframe(self._attribute, fb=fb)
 
     async def set_attribute_values(
         self, df: pd.DataFrame, infer_attribute_type: bool = False, fb: IFeedback = NoFeedback
@@ -186,7 +182,7 @@ class Attribute:
         )
 
         # As the values have been updated, don't allow loading the old values again.
-        self._loader = None
+        self._obj = None
 
     def as_dict(self) -> ObjectAttribute:
         """Get the attribute as a dictionary.
@@ -220,7 +216,7 @@ class Attributes(Sequence[Attribute]):
         if obj is None:
             self._attributes = [Attribute(attr, evo_context) for attr in attribute_list]
         else:
-            self._attributes = [Attribute(attr, evo_context, obj, AttributeLoader(attr)) for attr in attribute_list]
+            self._attributes = [Attribute(attr, evo_context, obj) for attr in attribute_list]
 
     def __getitem__(self, index: int) -> Attribute:
         return self._attributes[index]
@@ -304,9 +300,5 @@ class Attributes(Sequence[Attribute]):
         await self.append_attributes(df, fb)
 
     def update_document(self) -> None:
-        """Update the provided document with the current attributes.
-
-        :param document: The document to update.
-        :param attribute_adapter: The AttributesAdapter to use to update the document.
-        """
+        """Update the provided document with the current attributes."""
         self._attribute_adapter.set_attributes(self._document, [attr.as_dict() for attr in self])
