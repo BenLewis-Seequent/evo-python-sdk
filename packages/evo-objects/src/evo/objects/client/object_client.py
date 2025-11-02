@@ -22,7 +22,6 @@ from evo import jmespath, logging
 from evo.common import APIConnector, ICache, IFeedback
 from evo.common.io.exceptions import DataNotFoundError
 from evo.common.utils import NoFeedback, PartialFeedback
-from evo.jmespath import JMESPath
 
 from ..data import ObjectMetadata, ObjectReference, ObjectSchema
 from ..endpoints import ObjectsApi, models
@@ -196,7 +195,7 @@ class DownloadedObject:
         """Get this object as a dictionary."""
         return self._object.model_dump(mode="python", by_alias=True)
 
-    def search(self, expression: JMESPath) -> Any:
+    def search(self, expression: str) -> Any:
         """Search the object metadata using a JMESPath expression.
 
         :param expression: The JMESPath expression to use for the search.
@@ -279,8 +278,8 @@ class DownloadedObject:
     if _LOADER_AVAILABLE:
         # Optional support for loading Parquet data using PyArrow.
 
-        def _validate_typed_dict(self, value: _T | JMESPath, validator: TypeAdapter[_T]) -> _T:
-            if isinstance(value, JMESPath):
+        def _validate_typed_dict(self, value: _T | str, validator: TypeAdapter[_T]) -> _T:
+            if isinstance(value, str):
                 if isinstance(resolved := self.search(value), jmespath.JMESPathObjectProxy):
                     return validator.validate_python(resolved.raw)
                 else:
@@ -290,7 +289,7 @@ class DownloadedObject:
 
         @contextlib.asynccontextmanager
         async def _with_parquet_loader(
-            self, table_info: TableInfo | JMESPath, fb: IFeedback
+            self, table_info: TableInfo | str, fb: IFeedback
         ) -> AsyncGenerator[ParquetLoader, None]:
             """Download parquet data and get a ParquetLoader for the data referenced by the given
             table info or data reference string.
@@ -308,7 +307,7 @@ class DownloadedObject:
 
         async def download_table(
             self,
-            table_info: TableInfo | JMESPath,
+            table_info: TableInfo | str,
             fb: IFeedback = NoFeedback,
             *,
             nan_values: list[int] | list[float] | str | None = None,
@@ -330,7 +329,7 @@ class DownloadedObject:
             if column_names is None:
                 column_names = table.column_names
             if nan_values is not None:
-                if isinstance(nan_values, JMESPath):
+                if isinstance(nan_values, str):
                     resolved = self.search(nan_values)
                     if isinstance(resolved, jmespath.JMESPathArrayProxy):
                         nan_values = resolved.raw
@@ -357,7 +356,7 @@ class DownloadedObject:
 
         async def download_category_table(
             self,
-            category_info: CategoryInfo | JMESPath,
+            category_info: CategoryInfo | str,
             *,
             nan_values: list[int] | list[float] | str | None = None,
             column_names: Sequence[str] | None = None,
@@ -399,7 +398,7 @@ class DownloadedObject:
 
         async def download_attribute_table(
             self,
-            attribute: AttributeInfo | JMESPath,
+            attribute: AttributeInfo | str,
             fb: IFeedback = NoFeedback,
         ) -> pa.Table:
             """Download the data referenced by the given attribute as a PyArrow Table.
@@ -434,7 +433,7 @@ class DownloadedObject:
 
             async def download_dataframe(
                 self,
-                table_info: TableInfo | JMESPath,
+                table_info: TableInfo | str,
                 fb: IFeedback = NoFeedback,
                 *,
                 nan_values: list[int] | list[float] | str | None = None,
@@ -455,7 +454,7 @@ class DownloadedObject:
 
             async def download_category_dataframe(
                 self,
-                category_info: CategoryInfo | JMESPath,
+                category_info: CategoryInfo | str,
                 fb: IFeedback = NoFeedback,
                 *,
                 nan_values: list[int] | list[float] | str | None = None,
@@ -478,7 +477,7 @@ class DownloadedObject:
 
             async def download_attribute_dataframe(
                 self,
-                attribute: AttributeInfo | JMESPath,
+                attribute: AttributeInfo | str,
                 fb: IFeedback = NoFeedback,
             ) -> pd.DataFrame:
                 """Download the data referenced by the given attribute as a Pandas DataFrame.
@@ -511,7 +510,7 @@ class DownloadedObject:
         if _NP_AVAILABLE:
             # Optional support for loading data as NumPy arrays. Requires parquet support via PyArrow as well.
 
-            async def download_array(self, table_info: TableInfo | JMESPath, fb: IFeedback = NoFeedback) -> np.ndarray:
+            async def download_array(self, table_info: TableInfo | str, fb: IFeedback = NoFeedback) -> np.ndarray:
                 """Download the data referenced by the given table info as a NumPy array.
 
                 :param table_info: The table info dict, JMESPath to table info within the object.
