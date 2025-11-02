@@ -10,18 +10,14 @@
 #  limitations under the License.
 
 import sys
-from typing import TypeAlias
+from typing import Generic, TypeAlias, TypeVar
 
 if sys.version_info >= (3, 12):
     from typing import NotRequired, TypedDict
 else:
     from typing_extensions import NotRequired, TypedDict
 
-__all__ = [
-    "ArrayTableInfo",
-    "LookupTableInfo",
-    "TableInfo",
-]
+__all__ = ["ArrayTableInfo", "AttributeInfo", "CategoryInfo", "LookupTableInfo", "TableInfo"]
 
 
 class _BaseTableInfo(TypedDict):
@@ -40,3 +36,32 @@ class LookupTableInfo(_BaseTableInfo):
 
 
 TableInfo: TypeAlias = ArrayTableInfo | LookupTableInfo
+
+
+class CategoryInfo(TypedDict):
+    table: LookupTableInfo
+    values: TableInfo
+
+
+T = TypeVar("T")
+
+
+class _Nan(TypedDict, Generic[T]):
+    values: list[T]
+
+
+class NanCategorical(_Nan[int]): ...
+
+
+class NanContinuous(_Nan[float]): ...
+
+
+Nan: TypeAlias = NanCategorical | NanContinuous
+
+
+class AttributeInfo(TypedDict):
+    name: str
+    key: NotRequired[str]
+    nan_description: NotRequired[Nan]
+    values: ArrayTableInfo
+    table: NotRequired[LookupTableInfo]
