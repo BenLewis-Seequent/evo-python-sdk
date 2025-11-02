@@ -116,9 +116,6 @@ class Attribute:
         self._evo_context = evo_context
         self._obj = obj
 
-        if self._loader is not None and self._obj is None:
-            raise ValueError("An AttributeLoader requires a DownloadedObject.")
-
     @property
     def key(self) -> str:
         """The key used to identify this attribute.
