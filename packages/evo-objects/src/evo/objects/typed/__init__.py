@@ -9,6 +9,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from .downhole_collection import DownholeCollection, DownholeCollectionData
 from .pointset import PointSet, PointSetData
 from .regular_grid import (
     Regular3DGrid,
@@ -21,6 +22,8 @@ from .types import BoundingBox, CoordinateReferenceSystem, EpsgCode, Point3, Rot
 __all__ = [
     "BoundingBox",
     "CoordinateReferenceSystem",
+    "DownholeCollection",
+    "DownholeCollectionData",
     "EpsgCode",
     "Point3",
     "PointSet",
