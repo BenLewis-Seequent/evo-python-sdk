@@ -11,20 +11,28 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
 from pydantic import TypeAdapter
 
+from evo import jmespath
+from evo.common import IContext
 from evo.objects import SchemaVersion
 from evo.objects.utils.table_formats import FLOAT_ARRAY_3
 
-from ._adapters import AttributesAdapter, TableAdapter
+from ._adapters import AttributesAdapter, CategoryTableAdapter, DatasetAdapter, TableAdapter
 from ._property import SchemaProperty
 from .base import BaseSpatialObject, BaseSpatialObjectData, ConstructableObject, DatasetProperty
 from .dataset import Dataset
 from .types import BoundingBox
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 __all__ = [
     "DownholeCollection",
@@ -42,32 +50,48 @@ class DownholeCollectionData(BaseSpatialObjectData):
     Full support for path data and collections will be added in future versions.
     """
 
-    coordinates: pd.DataFrame  # DataFrame with x, y, z columns for collar locations
+    collars: pd.DataFrame  # DataFrame with x, y, z, and hole_id columns
     distance_unit: str | None = None
     desurvey: str | None = None
 
     def compute_bounding_box(self) -> BoundingBox:
         """Compute the bounding box from the collar coordinates."""
-        if len(self.coordinates) == 0:
+        if len(self.collars) == 0:
             return None
 
         return BoundingBox.from_points(
-            self.coordinates["x"].values,
-            self.coordinates["y"].values,
-            self.coordinates["z"].values,
+            self.collars["x"].values,
+            self.collars["y"].values,
+            self.collars["z"].values,
         )
 
 
 class Location(Dataset):
     """A dataset representing the collar location information for drill holes.
 
-    This contains the x, y, z coordinates of drill hole collars.
+    This contains the x, y, z coordinates of drill hole collars and their hole IDs.
     """
 
     bounding_box: BoundingBox = SchemaProperty(
         "bounding_box",
         TypeAdapter(BoundingBox | None),
     )
+
+    def _expected_length(self) -> int:
+        """Return the expected number of rows."""
+        return jmespath.search("coordinates.values.length", self._document)
+
+    @classmethod
+    async def create_from_data(
+        cls, document: dict, data: Any, dataset_adapter: DatasetAdapter, context: IContext
+    ) -> Self:
+        """Create Location dataset from collar DataFrame."""
+        # Data is now a single DataFrame with x, y, z, and hole_id columns
+        if data is None:
+            data = pd.DataFrame({"x": [], "y": [], "z": [], "hole_id": pd.Categorical([])})
+
+        # Call parent's create_from_data with the collar dataframe
+        return await super().create_from_data(document, data, dataset_adapter, context)
 
 
 class DownholeCollection(BaseSpatialObject, ConstructableObject[DownholeCollectionData]):
@@ -85,7 +109,7 @@ class DownholeCollection(BaseSpatialObject, ConstructableObject[DownholeCollecti
     sub_classification = "downhole-collection"
     creation_schema_version = SchemaVersion(major=1, minor=3, patch=1)
 
-    # Location dataset - contains the collar coordinates
+    # Location dataset - contains the collar coordinates and hole IDs
     location: Location = DatasetProperty(
         Location,
         value_adapters=[
@@ -96,6 +120,12 @@ class DownholeCollection(BaseSpatialObject, ConstructableObject[DownholeCollecti
                 values_path="location.coordinates",
                 table_formats=[FLOAT_ARRAY_3],
             ),
+            CategoryTableAdapter(
+                min_major_version=1,
+                max_major_version=1,
+                column_names=("hole_id",),
+                category_data_path="location.hole_id",
+            ),
         ],
         attributes_adapters=[
             AttributesAdapter(
@@ -104,7 +134,7 @@ class DownholeCollection(BaseSpatialObject, ConstructableObject[DownholeCollecti
                 attribute_list_path="location.attributes",
             )
         ],
-        extract_data=lambda data: data.coordinates,
+        extract_data=lambda data: data.collars,
     )
 
     # Optional schema properties

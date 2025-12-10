@@ -52,18 +52,19 @@ class TestDownholeCollection(TestWithConnector):
     @property
     def example_downhole_collection(self) -> DownholeCollectionData:
         """Create an example downhole collection with 3 drill holes."""
-        # Collar coordinates for 3 holes
-        coordinates = pd.DataFrame(
+        # Collar data with coordinates and hole IDs
+        collars = pd.DataFrame(
             {
                 "x": [100.0, 200.0, 300.0],
                 "y": [1000.0, 1100.0, 1200.0],
                 "z": [50.0, 55.0, 60.0],
+                "hole_id": pd.Categorical(["DH-01", "DH-02", "DH-03"]),
             }
         )
 
         return DownholeCollectionData(
             name="Test Downhole Collection",
-            coordinates=coordinates,
+            collars=collars,
             distance_unit="m",
             desurvey="minimum_curvature",
         )
@@ -71,17 +72,18 @@ class TestDownholeCollection(TestWithConnector):
     @property
     def minimal_downhole_collection(self) -> DownholeCollectionData:
         """Create a minimal downhole collection with required fields only."""
-        coordinates = pd.DataFrame(
+        collars = pd.DataFrame(
             {
                 "x": [100.0],
                 "y": [1000.0],
                 "z": [50.0],
+                "hole_id": pd.Categorical(["DH-01"]),
             }
         )
 
         return DownholeCollectionData(
             name="Minimal Downhole Collection",
-            coordinates=coordinates,
+            collars=collars,
         )
 
     async def test_bounding_box_computation(self):
@@ -101,7 +103,7 @@ class TestDownholeCollection(TestWithConnector):
         """Test bounding box with empty coordinates."""
         data = dataclasses.replace(
             self.minimal_downhole_collection,
-            coordinates=pd.DataFrame(columns=["x", "y", "z"]),
+            collars=pd.DataFrame({"x": [], "y": [], "z": [], "hole_id": pd.Categorical([])}),
         )
         bbox = data.compute_bounding_box()
         self.assertIsNone(bbox)
@@ -194,17 +196,18 @@ class TestDownholeCollection(TestWithConnector):
         """Test downhole collection with multiple drill holes."""
         # Create a larger dataset with 10 holes
         num_holes = 10
-        coordinates = pd.DataFrame(
+        collars = pd.DataFrame(
             {
                 "x": np.random.uniform(0, 1000, num_holes),
                 "y": np.random.uniform(0, 1000, num_holes),
                 "z": np.random.uniform(0, 100, num_holes),
+                "hole_id": pd.Categorical([f"DH-{i:02d}" for i in range(1, num_holes + 1)]),
             }
         )
 
         data = DownholeCollectionData(
             name="Large Downhole Collection",
-            coordinates=coordinates,
+            collars=collars,
             distance_unit="m",
         )
 
