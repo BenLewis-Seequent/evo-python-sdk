@@ -50,7 +50,7 @@ class DownholeCollectionData(BaseSpatialObjectData):
     Full support for path data and collections will be added in future versions.
     """
 
-    collars: pd.DataFrame  # DataFrame with x, y, z, and hole_id columns
+    collars: pd.DataFrame  # DataFrame with x, y, z, hole_id, and optionally final, target, current columns
     distance_unit: str | None = None
     desurvey: str | None = None
 
@@ -69,7 +69,8 @@ class DownholeCollectionData(BaseSpatialObjectData):
 class Location(Dataset):
     """A dataset representing the collar location information for drill holes.
 
-    This contains the x, y, z coordinates of drill hole collars and their hole IDs.
+    This contains the x, y, z coordinates of drill hole collars, their hole IDs,
+    and optionally distances (final, target, current).
     """
 
     bounding_box: BoundingBox = SchemaProperty(
@@ -125,6 +126,13 @@ class DownholeCollection(BaseSpatialObject, ConstructableObject[DownholeCollecti
                 max_major_version=1,
                 column_names=("hole_id",),
                 category_data_path="location.hole_id",
+            ),
+            TableAdapter(
+                min_major_version=1,
+                max_major_version=1,
+                column_names=("final", "target", "current"),
+                values_path="location.distances",
+                table_formats=[FLOAT_ARRAY_3],
             ),
         ],
         attributes_adapters=[
