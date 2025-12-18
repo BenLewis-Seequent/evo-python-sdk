@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
@@ -57,6 +58,7 @@ class BaseSpatialObject(BaseObject):
         object_dict["bounding_box"] = cls._bbox_type_adapter.dump_python(data.compute_bounding_box())
         return object_dict
 
+    @abstractmethod
     def compute_bounding_box(self) -> BoundingBox:
         """Compute the bounding box for the object based on its datasets.
 

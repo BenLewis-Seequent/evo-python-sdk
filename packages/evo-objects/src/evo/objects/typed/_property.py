@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Generic, Protocol, TypeVar, overload
+from typing import Any, Generic, Protocol, TypeVar, overload
 
 from pydantic import TypeAdapter
 
@@ -44,12 +44,9 @@ class SchemaProperty(Generic[_T]):
     This can be used on either typed objects classes or dataset classes.
     """
 
-    def __init__(
-        self, jmespath_expr: str, type_adapter: TypeAdapter[_T], default_factory: Callable[[], _T] | None = None
-    ) -> None:
+    def __init__(self, jmespath_expr: str, type_adapter: TypeAdapter[_T]) -> None:
         self._jmespath_expr = jmespath_expr
         self._type_adapter = type_adapter
-        self._default_factory = default_factory
 
     @overload
     def __get__(self, instance: None, owner: type[WithDocument]) -> SchemaProperty[_T]: ...
@@ -62,8 +59,6 @@ class SchemaProperty(Generic[_T]):
             return self
 
         value = instance.search(self._jmespath_expr)
-        if value is None and self._default_factory is not None:
-            return self._default_factory()
         if isinstance(value, (jmespath.JMESPathArrayProxy, jmespath.JMESPathObjectProxy)):
             value = value.raw
         return self._type_adapter.validate_python(value)

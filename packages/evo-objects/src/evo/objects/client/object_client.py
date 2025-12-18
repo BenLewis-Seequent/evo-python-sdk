@@ -20,7 +20,7 @@ from uuid import UUID
 from pydantic import ConfigDict, TypeAdapter
 
 from evo import jmespath, logging
-from evo.common import APIConnector, ICache, IFeedback
+from evo.common import APIConnector, ICache, IContext, IFeedback
 from evo.common.io.exceptions import DataNotFoundError
 from evo.common.utils import NoFeedback, split_feedback
 
@@ -150,6 +150,30 @@ class DownloadedObject:
             urls_by_name=urls_by_name,
             connector=connector,
             cache=cache,
+        )
+
+    @staticmethod
+    async def from_context(
+        context: IContext,
+        reference: ObjectReference | str,
+        request_timeout: int | float | tuple[int | float, int | float] | None = None,
+    ) -> DownloadedObject:
+        """Download a geoscience object from the service using the given context.
+
+        :param context: The context containing the connector and cache to use.
+        :param reference: The reference to the object to download, or a URL as a string that can be parsed into
+            a reference.
+        :param request_timeout: An optional timeout to use for API requests. See evo.common.APIConnector for details.
+
+        :return: A DownloadedObject instance.
+
+        :raises ValueError: If the reference is invalid, or if the connector base URL does not match the reference hub URL.
+        """
+        return await DownloadedObject.from_reference(
+            connector=context.get_connector(),
+            reference=reference,
+            cache=context.get_cache(),
+            request_timeout=request_timeout,
         )
 
     @property
