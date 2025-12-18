@@ -381,7 +381,7 @@ class BaseObject(_BaseObject):
     name: str = SchemaProperty("name", TypeAdapter(str))
     description: str | None = SchemaProperty("description", TypeAdapter(str | None))
     tags: dict[str, str] | None = SchemaProperty("tags", TypeAdapter(dict[str, str] | None))
-    extensions: dict | None = SchemaProperty("extensions", TypeAdapter(dict | None))
+    extensions: dict[str, Any] | None = SchemaProperty("extensions", TypeAdapter(dict[str, Any] | None))
 
     @classmethod
     async def create(
