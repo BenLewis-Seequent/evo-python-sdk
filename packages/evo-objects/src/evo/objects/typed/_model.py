@@ -12,9 +12,10 @@
 from __future__ import annotations
 
 import copy
+import types
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Generic, TypeVar, get_args, get_origin, get_type_hints, overload
+from typing import Annotated, Any, Generic, TypeVar, Union, get_args, get_origin, get_type_hints, overload
 
 from pydantic import TypeAdapter
 
@@ -81,6 +82,26 @@ class SubModelMetadata:
 
     data_field: str | None
     """The field name in the data class for this sub-model."""
+
+    is_optional: bool = False
+    """Whether this sub-model is optional (can be None)."""
+
+
+def _is_optional_type(annotation: Any) -> tuple[Any, bool]:
+    """Check if an annotation is an Optional type (Union with None).
+
+    Returns a tuple of (base_type, is_optional).
+    If the annotation is Optional[X] or X | None, returns (X, True).
+    Otherwise returns (annotation, False).
+    """
+    origin = get_origin(annotation)
+    if origin is Union or origin is types.UnionType:
+        args = get_args(annotation)
+        non_none_args = [a for a in args if a is not type(None)]
+        if len(non_none_args) == 1 and len(args) == 2:
+            # This is Optional[X] or X | None
+            return non_none_args[0], True
+    return annotation, False
 
 
 class SchemaProperty(Generic[_T]):
@@ -225,14 +246,18 @@ class SchemaModel:
             if schema_location is None:
                 continue
 
+            # Check if this is an optional type (X | None)
+            inner_type, is_optional = _is_optional_type(base_type)
+
             # To robustly check for SchemaModel/SchemaList, we need to strip any generic or Annotated wrappers
-            bare_base_type = get_origin(base_type) or base_type
-            if issubclass(bare_base_type, (SchemaModel, SchemaList)):
+            bare_base_type = get_origin(inner_type) or inner_type
+            if isinstance(bare_base_type, type) and issubclass(bare_base_type, (SchemaModel, SchemaList)):
                 data_field = data_location.field_path if data_location else None
                 sub_models[field_name] = SubModelMetadata(
-                    model_type=base_type,
+                    model_type=inner_type,
                     jmespath_expr=schema_location.jmespath_expr,
                     data_field=data_field,
+                    is_optional=is_optional,
                 )
             else:
                 # Create a TypeAdapter for the full annotation (preserves Field defaults)
@@ -277,7 +302,11 @@ class SchemaModel:
             if metadata.jmespath_expr:
                 sub_document = jmespath.search(metadata.jmespath_expr, self._document)
                 if sub_document is None:
-                    # Initialize an empty list/dict for the sub-model if not present
+                    # For optional sub-models, set the attribute to None if not present
+                    if metadata.is_optional:
+                        setattr(self, sub_model_name, None)
+                        continue
+                    # Initialize an empty list/dict for required sub-models if not present
                     if issubclass(metadata.model_type, SchemaList):
                         sub_document = []
                     else:
@@ -315,8 +344,14 @@ class SchemaModel:
         for name, metadata in cls._sub_models.items():
             if metadata.data_field:
                 sub_data = getattr(data, metadata.data_field, None)
+            elif metadata.is_optional:
+                # Optional sub-model with no data field - skip it
+                continue
             else:
                 sub_data = data
+            # Skip optional sub-models when their data is None
+            if sub_data is None and metadata.is_optional:
+                continue
             await builder.set_sub_model_value(name, sub_data)
         return builder.document
 

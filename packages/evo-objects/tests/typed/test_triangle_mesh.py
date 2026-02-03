@@ -311,3 +311,559 @@ class TestTriangleMesh(TestWithConnector):
             self.assertEqual(len(object_json["triangles"]["indices"]["attributes"]), 1)
             self.assertEqual(object_json["triangles"]["indices"]["attributes"][0]["name"], "area")
             self.assertEqual(object_json["triangles"]["indices"]["attributes"][0]["attribute_type"], "scalar")
+
+    async def test_edges_and_parts_none_by_default(self):
+        """Test that edges and parts are None when not provided."""
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
+
+        self.assertIsNone(result.edges)
+        self.assertIsNone(result.parts)
+        self.assertIsNone(result.num_edges)
+        self.assertIsNone(result.num_parts)
+
+    async def test_edges_from_existing_object(self):
+        """Test reading edges from an existing object with edge data."""
+        test_object_id = str(uuid.uuid4())
+        # Create an object JSON with edges
+        edges_json = {
+            "indices": {
+                "data": "test-data-ref-1",
+                "length": 3,
+                "width": 2,
+                "data_type": "uint64",
+            },
+            "attributes": [],
+        }
+        obj_json = {
+            "schema": "/objects/triangle-mesh/2.2.0/triangle-mesh.schema.json",
+            "name": "Mesh with Edges",
+            "uuid": test_object_id,
+            "bounding_box": {"min_x": 0.0, "max_x": 1.0, "min_y": 0.0, "max_y": 1.0, "min_z": 0.0, "max_z": 1.0},
+            "coordinate_reference_system": "unspecified",
+            "triangles": {
+                "vertices": {
+                    "data": "test-data-ref-2",
+                    "length": 4,
+                    "width": 3,
+                    "data_type": "float64",
+                    "attributes": [],
+                },
+                "indices": {
+                    "data": "test-data-ref-3",
+                    "length": 4,
+                    "width": 3,
+                    "data_type": "uint64",
+                    "attributes": [],
+                },
+            },
+            "edges": edges_json,
+        }
+        with self._mock_geoscience_objects() as mock_client:
+            mock_client.objects[test_object_id] = obj_json
+            ref = ObjectReference.new(environment=self.environment, object_id=uuid.UUID(test_object_id))
+            result = await TriangleMesh.from_reference(context=self.context, reference=ref)
+
+        self.assertIsNotNone(result.edges)
+        self.assertEqual(result.num_edges, 3)
+        self.assertIsNone(result.parts)
+        self.assertIsNone(result.num_parts)
+
+    async def test_parts_from_existing_object(self):
+        """Test reading parts from an existing object with parts data."""
+        test_object_id = str(uuid.uuid4())
+        # Create an object JSON with parts
+        parts_json = {
+            "chunks": {
+                "data": "test-data-ref-1",
+                "length": 2,
+                "width": 2,
+                "data_type": "uint64",
+                "attributes": [],
+            },
+            "attributes": [],
+        }
+        obj_json = {
+            "schema": "/objects/triangle-mesh/2.2.0/triangle-mesh.schema.json",
+            "name": "Mesh with Parts",
+            "uuid": test_object_id,
+            "bounding_box": {"min_x": 0.0, "max_x": 1.0, "min_y": 0.0, "max_y": 1.0, "min_z": 0.0, "max_z": 1.0},
+            "coordinate_reference_system": "unspecified",
+            "triangles": {
+                "vertices": {
+                    "data": "test-data-ref-2",
+                    "length": 4,
+                    "width": 3,
+                    "data_type": "float64",
+                    "attributes": [],
+                },
+                "indices": {
+                    "data": "test-data-ref-3",
+                    "length": 4,
+                    "width": 3,
+                    "data_type": "uint64",
+                    "attributes": [],
+                },
+            },
+            "parts": parts_json,
+        }
+        with self._mock_geoscience_objects() as mock_client:
+            mock_client.objects[test_object_id] = obj_json
+            ref = ObjectReference.new(environment=self.environment, object_id=uuid.UUID(test_object_id))
+            result = await TriangleMesh.from_reference(context=self.context, reference=ref)
+
+        self.assertIsNotNone(result.parts)
+        self.assertEqual(result.num_parts, 2)
+        self.assertIsNone(result.edges)
+        self.assertIsNone(result.num_edges)
+
+    async def test_edges_with_parts_from_existing_object(self):
+        """Test reading edges with edge parts from an existing object."""
+        test_object_id = str(uuid.uuid4())
+        # Create an object JSON with edges that have parts
+        edges_json = {
+            "indices": {
+                "data": "test-data-ref-1",
+                "length": 6,
+                "width": 2,
+                "data_type": "uint64",
+            },
+            "attributes": [],
+            "parts": {
+                "chunks": {
+                    "data": "test-data-ref-4",
+                    "length": 2,
+                    "width": 2,
+                    "data_type": "uint64",
+                    "attributes": [],
+                },
+                "attributes": [],
+            },
+        }
+        obj_json = {
+            "schema": "/objects/triangle-mesh/2.2.0/triangle-mesh.schema.json",
+            "name": "Mesh with Edge Parts",
+            "uuid": test_object_id,
+            "bounding_box": {"min_x": 0.0, "max_x": 1.0, "min_y": 0.0, "max_y": 1.0, "min_z": 0.0, "max_z": 1.0},
+            "coordinate_reference_system": "unspecified",
+            "triangles": {
+                "vertices": {
+                    "data": "test-data-ref-2",
+                    "length": 4,
+                    "width": 3,
+                    "data_type": "float64",
+                    "attributes": [],
+                },
+                "indices": {
+                    "data": "test-data-ref-3",
+                    "length": 4,
+                    "width": 3,
+                    "data_type": "uint64",
+                    "attributes": [],
+                },
+            },
+            "edges": edges_json,
+        }
+        with self._mock_geoscience_objects() as mock_client:
+            mock_client.objects[test_object_id] = obj_json
+            ref = ObjectReference.new(environment=self.environment, object_id=uuid.UUID(test_object_id))
+            result = await TriangleMesh.from_reference(context=self.context, reference=ref)
+
+        self.assertIsNotNone(result.edges)
+        self.assertEqual(result.num_edges, 6)
+        self.assertIsNotNone(result.edges.parts)
+        self.assertEqual(result.edges.parts.num_parts, 2)
+
+    async def test_set_edges_simple(self):
+        """Test setting edges on a triangle mesh."""
+        from evo.objects.typed import EdgesData
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
+
+        # Initially no edges
+        self.assertIsNone(result.edges)
+
+        # Create edge data (edges connecting vertices)
+        edge_indices = pd.DataFrame(
+            {
+                "start": [0, 1, 2, 0, 1, 0],
+                "end": [1, 2, 0, 3, 3, 2],
+            }
+        )
+
+        edges_data = EdgesData(indices=edge_indices)
+
+        # Set edges
+        with self._mock_geoscience_objects():
+            await result.set_edges(edges_data)
+
+        # Now edges should be set
+        self.assertIsNotNone(result.edges)
+        self.assertEqual(result.num_edges, 6)
+
+    async def test_set_edges_with_parts(self):
+        """Test setting edges with edge parts on a triangle mesh."""
+        from evo.objects.typed import EdgePartsData, EdgesData
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
+
+        # Create edge data with parts
+        edge_indices = pd.DataFrame(
+            {
+                "start": [0, 1, 2, 0, 1, 0],
+                "end": [1, 2, 0, 3, 3, 2],
+            }
+        )
+        edge_chunks = pd.DataFrame(
+            {
+                "offset": [0, 3],
+                "count": [3, 3],
+            }
+        )
+
+        edge_parts_data = EdgePartsData(chunks=edge_chunks)
+        edges_data = EdgesData(indices=edge_indices, parts=edge_parts_data)
+
+        # Set edges
+        with self._mock_geoscience_objects():
+            await result.set_edges(edges_data)
+
+        # Verify edges and parts are set
+        self.assertIsNotNone(result.edges)
+        self.assertEqual(result.num_edges, 6)
+        self.assertIsNotNone(result.edges.parts)
+        self.assertEqual(result.edges.parts.num_parts, 2)
+
+    async def test_set_parts(self):
+        """Test setting parts on a triangle mesh."""
+        from evo.objects.typed import PartsData
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
+
+        # Initially no parts
+        self.assertIsNone(result.parts)
+
+        # Create parts data
+        chunks = pd.DataFrame(
+            {
+                "offset": [0, 2],
+                "count": [2, 2],
+            }
+        )
+        triangle_indices = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3],
+            }
+        )
+
+        parts_data = PartsData(chunks=chunks, triangle_indices=triangle_indices)
+
+        # Set parts
+        with self._mock_geoscience_objects():
+            await result.set_parts(parts_data)
+
+        # Now parts should be set
+        self.assertIsNotNone(result.parts)
+        self.assertEqual(result.num_parts, 2)
+
+    async def test_clear_edges(self):
+        """Test clearing edges from a triangle mesh."""
+        from evo.objects.typed import EdgesData
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
+
+        # Set edges first
+        edge_indices = pd.DataFrame(
+            {
+                "start": [0, 1, 2],
+                "end": [1, 2, 0],
+            }
+        )
+        edges_data = EdgesData(indices=edge_indices)
+        with self._mock_geoscience_objects():
+            await result.set_edges(edges_data)
+
+        self.assertIsNotNone(result.edges)
+
+        # Clear edges (sync method, no await)
+        result.clear_edges()
+
+        self.assertIsNone(result.edges)
+
+    async def test_clear_parts(self):
+        """Test clearing parts from a triangle mesh."""
+        from evo.objects.typed import PartsData
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
+
+        # Set parts first
+        chunks = pd.DataFrame(
+            {
+                "offset": [0, 2],
+                "count": [2, 2],
+            }
+        )
+        triangle_indices = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3],
+            }
+        )
+        parts_data = PartsData(chunks=chunks, triangle_indices=triangle_indices)
+        with self._mock_geoscience_objects():
+            await result.set_parts(parts_data)
+
+        self.assertIsNotNone(result.parts)
+
+        # Clear parts (sync method, no await)
+        result.clear_parts()
+
+        self.assertIsNone(result.parts)
+
+    async def test_set_edges_validation_mismatched_columns(self):
+        """Test that EdgesData validates column names."""
+        from evo.objects.typed import EdgesData
+
+        # Wrong column names should raise an error
+        with self.assertRaises(ValueError) as cm:
+            EdgesData(
+                indices=pd.DataFrame(
+                    {
+                        "vertex1": [0, 1, 2],  # Wrong column name
+                        "vertex2": [1, 2, 0],  # Wrong column name
+                    }
+                )
+            )
+        self.assertIn("start", str(cm.exception))
+
+    async def test_set_parts_validation_mismatched_columns(self):
+        """Test that PartsData validates column names."""
+        from evo.objects.typed import PartsData
+
+        # Wrong column names in chunks should raise an error
+        with self.assertRaises(ValueError) as cm:
+            PartsData(
+                chunks=pd.DataFrame(
+                    {
+                        "start": [0, 2],  # Wrong column name
+                        "length": [2, 2],  # Wrong column name
+                    }
+                ),
+                triangle_indices=pd.DataFrame(
+                    {
+                        "index": [0, 1, 2, 3],
+                    }
+                ),
+            )
+        self.assertIn("offset", str(cm.exception))
+
+    async def test_create_with_edges_and_parts(self):
+        """Test creating a TriangleMesh with edges and parts in the data."""
+        from evo.objects.typed import EdgePartsData, EdgesData, PartsData
+
+        # Create edge data with parts
+        edge_indices = pd.DataFrame(
+            {
+                "start": [0, 1, 2, 0, 1, 0],
+                "end": [1, 2, 0, 3, 3, 2],
+            }
+        )
+        edge_chunks = pd.DataFrame(
+            {
+                "offset": [0, 3],
+                "count": [3, 3],
+            }
+        )
+        edge_parts = EdgePartsData(chunks=edge_chunks)
+        edges = EdgesData(indices=edge_indices, parts=edge_parts)
+
+        # Create parts data
+        chunks = pd.DataFrame(
+            {
+                "offset": [0, 2],
+                "count": [2, 2],
+            }
+        )
+        triangle_indices = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3],
+            }
+        )
+        parts = PartsData(chunks=chunks, triangle_indices=triangle_indices)
+
+        # Create mesh data with edges and parts
+        mesh_data = TriangleMeshData(
+            name="Mesh with Edges and Parts",
+            vertices=pd.DataFrame(
+                {
+                    "x": [0.0, 1.0, 0.5, 0.5],
+                    "y": [0.0, 0.0, 1.0, 0.5],
+                    "z": [0.0, 0.0, 0.0, 1.0],
+                }
+            ),
+            triangles=pd.DataFrame(
+                {
+                    "n0": [0, 0, 0, 1],
+                    "n1": [1, 2, 3, 2],
+                    "n2": [2, 3, 1, 3],
+                }
+            ),
+            edges=edges,
+            parts=parts,
+        )
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=mesh_data)
+
+        # Verify edges and parts are set
+        self.assertIsNotNone(result.edges)
+        self.assertEqual(result.num_edges, 6)
+        self.assertIsNotNone(result.edges.parts)
+        self.assertEqual(result.edges.parts.num_parts, 2)
+
+        self.assertIsNotNone(result.parts)
+        self.assertEqual(result.num_parts, 2)
+
+    async def test_create_edges_with_attributes(self):
+        """Test creating a TriangleMesh with edge attributes."""
+        from evo.objects.typed import EdgesData
+
+        # Create edge data with attributes (extra columns beyond start/end)
+        edge_indices = pd.DataFrame(
+            {
+                "start": [0, 1, 2],
+                "end": [1, 2, 0],
+                "edge_length": [1.0, 1.5, 1.2],
+                "edge_type": ["boundary", "internal", "boundary"],
+            }
+        )
+        edges = EdgesData(indices=edge_indices)
+
+        mesh_data = TriangleMeshData(
+            name="Mesh with Edge Attributes",
+            vertices=pd.DataFrame(
+                {
+                    "x": [0.0, 1.0, 0.5],
+                    "y": [0.0, 0.0, 1.0],
+                    "z": [0.0, 0.0, 0.0],
+                }
+            ),
+            triangles=pd.DataFrame(
+                {
+                    "n0": [0],
+                    "n1": [1],
+                    "n2": [2],
+                }
+            ),
+            edges=edges,
+        )
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=mesh_data)
+
+        # Verify edges are set with attributes
+        self.assertIsNotNone(result.edges)
+        self.assertEqual(result.num_edges, 3)
+        self.assertEqual(len(result.edges.attributes), 2)
+
+    async def test_create_parts_with_attributes(self):
+        """Test creating a TriangleMesh with part attributes."""
+        from evo.objects.typed import PartsData
+
+        # Create parts data with attributes (extra columns beyond offset/count)
+        chunks = pd.DataFrame(
+            {
+                "offset": [0, 2],
+                "count": [2, 2],
+                "part_name": ["base", "top"],
+                "material_id": [1, 2],
+            }
+        )
+        triangle_indices = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3],
+            }
+        )
+        parts = PartsData(chunks=chunks, triangle_indices=triangle_indices)
+
+        mesh_data = TriangleMeshData(
+            name="Mesh with Part Attributes",
+            vertices=pd.DataFrame(
+                {
+                    "x": [0.0, 1.0, 0.5, 0.5],
+                    "y": [0.0, 0.0, 1.0, 0.5],
+                    "z": [0.0, 0.0, 0.0, 1.0],
+                }
+            ),
+            triangles=pd.DataFrame(
+                {
+                    "n0": [0, 0, 0, 1],
+                    "n1": [1, 2, 3, 2],
+                    "n2": [2, 3, 1, 3],
+                }
+            ),
+            parts=parts,
+        )
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=mesh_data)
+
+        # Verify parts are set with attributes
+        self.assertIsNotNone(result.parts)
+        self.assertEqual(result.num_parts, 2)
+        self.assertEqual(len(result.parts.attributes), 2)
+
+    async def test_create_edge_parts_with_attributes(self):
+        """Test creating a TriangleMesh with edge part attributes."""
+        from evo.objects.typed import EdgePartsData, EdgesData
+
+        # Create edge parts with attributes
+        edge_chunks = pd.DataFrame(
+            {
+                "offset": [0, 3],
+                "count": [3, 3],
+                "group_name": ["group_a", "group_b"],
+            }
+        )
+        edge_parts = EdgePartsData(chunks=edge_chunks)
+        edges = EdgesData(
+            indices=pd.DataFrame(
+                {
+                    "start": [0, 1, 2, 0, 1, 0],
+                    "end": [1, 2, 0, 3, 3, 2],
+                }
+            ),
+            parts=edge_parts,
+        )
+
+        mesh_data = TriangleMeshData(
+            name="Mesh with Edge Part Attributes",
+            vertices=pd.DataFrame(
+                {
+                    "x": [0.0, 1.0, 0.5, 0.5],
+                    "y": [0.0, 0.0, 1.0, 0.5],
+                    "z": [0.0, 0.0, 0.0, 1.0],
+                }
+            ),
+            triangles=pd.DataFrame(
+                {
+                    "n0": [0, 0, 0, 1],
+                    "n1": [1, 2, 3, 2],
+                    "n2": [2, 3, 1, 3],
+                }
+            ),
+            edges=edges,
+        )
+
+        with self._mock_geoscience_objects():
+            result = await TriangleMesh.create(context=self.context, data=mesh_data)
+
+        # Verify edge parts are set with attributes
+        self.assertIsNotNone(result.edges)
+        self.assertIsNotNone(result.edges.parts)
+        self.assertEqual(result.edges.parts.num_parts, 2)
+        self.assertEqual(len(result.edges.parts.attributes), 1)

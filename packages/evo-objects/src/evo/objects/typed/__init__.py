@@ -29,8 +29,18 @@ from .tensor_grid import (
     Tensor3DGridData,
 )
 from .triangle_mesh import (
+    EdgeIndices,
+    EdgeParts,
+    EdgePartsData,
+    Edges,
+    EdgesData,
+    Indices,
+    Parts,
+    PartsData,
     TriangleMesh,
     TriangleMeshData,
+    Triangles,
+    Vertices,
 )
 from .types import BoundingBox, CoordinateReferenceSystem, EpsgCode, Point3, Rotation, Size3d, Size3i
 
@@ -41,7 +51,15 @@ __all__ = [
     "BaseSpatialObject",
     "BoundingBox",
     "CoordinateReferenceSystem",
+    "EdgeIndices",
+    "EdgeParts",
+    "EdgePartsData",
+    "Edges",
+    "EdgesData",
     "EpsgCode",
+    "Indices",
+    "Parts",
+    "PartsData",
     "Point3",
     "PointSet",
     "PointSetData",
@@ -56,4 +74,6 @@ __all__ = [
     "Tensor3DGridData",
     "TriangleMesh",
     "TriangleMeshData",
+    "Triangles",
+    "Vertices",
 ]
