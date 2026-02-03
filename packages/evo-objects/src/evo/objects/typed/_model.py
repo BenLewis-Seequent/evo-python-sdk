@@ -95,11 +95,10 @@ def _is_optional_type(annotation: Any) -> tuple[Any, bool]:
     Otherwise returns (annotation, False).
     """
     origin = get_origin(annotation)
-    if origin is Union or origin is types.UnionType:
+    if origin in (Union, types.UnionType):
         args = get_args(annotation)
         non_none_args = [a for a in args if a is not type(None)]
         if len(non_none_args) == 1 and len(args) == 2:
-            # This is Optional[X] or X | None
             return non_none_args[0], True
     return annotation, False
 
@@ -176,7 +175,7 @@ class SchemaBuilder:
         _set_property_value(schema_property, self.document, value)
 
     async def set_sub_model_value(self, name: str, data: Any) -> None:
-        metadata = self._sub_models[name]
+        metadata = self._sub_models[name].metadata
         sub_document = await metadata.model_type._data_to_schema(data, context=self._context)
         if metadata.jmespath_expr:
             assign_jmespath_value(self.document, metadata.jmespath_expr, sub_document)
@@ -184,27 +183,59 @@ class SchemaBuilder:
             self.document.update(sub_document)
 
 
-def _get_base_type(annotation: Any) -> tuple[Any, SchemaLocation | None, DataLocation | None]:
-    """Extract the base type and SchemaLocation from an annotation.
+def _get_annotation_metadata(annotation: Any) -> tuple[Any, dict[type, Any]]:
+    """Extract the base type and metadata from an Annotated type.
 
     :param annotation: The type annotation to process.
-    :return: A tuple of (base_type, schema_location, data_location).
+    :return: A tuple of (base_type, metadata_dict) where metadata_dict maps
+             metadata class types to their instances.
     """
     if get_origin(annotation) is Annotated:
         args = get_args(annotation)
-        if len(args) < 2:
-            return annotation, None, None
+        if len(args) >= 2:
+            metadata = {type(m): m for m in args[1:]}
+            return args[0], metadata
+    return annotation, {}
 
-        schema_location: SchemaLocation | None = None
-        data_location: DataLocation | None = None
-        for item in args[1:]:
-            if isinstance(item, SchemaLocation):
-                schema_location = item
-            elif isinstance(item, DataLocation):
-                data_location = item
 
-        return args[0], schema_location, data_location
-    return annotation, None, None
+class SubModelProperty(Generic[_T]):
+    """Descriptor for sub-model fields within a SchemaModel.
+
+    This handles both getting and deleting sub-models. Setting is handled
+    via async methods since it may require data uploads.
+    """
+
+    def __init__(self, metadata: SubModelMetadata) -> None:
+        self._metadata = metadata
+        self._attr_name: str = ""
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self._attr_name = f"_submodel_{name}"
+
+    @overload
+    def __get__(self, instance: None, owner: type[SchemaModel]) -> SubModelProperty[_T]: ...
+
+    @overload
+    def __get__(self, instance: SchemaModel, owner: type[SchemaModel]) -> _T | None: ...
+
+    def __get__(self, instance: SchemaModel | None, owner: type[SchemaModel]) -> Any:
+        if instance is None:
+            return self
+        return getattr(instance, self._attr_name, None)
+
+    def __set__(self, instance: SchemaModel, value: _T | None) -> None:
+        object.__setattr__(instance, self._attr_name, value)
+
+    def __delete__(self, instance: SchemaModel) -> None:
+        if not self._metadata.is_optional:
+            raise AttributeError("Cannot delete required sub-model")
+        if self._metadata.jmespath_expr:
+            delete_jmespath_value(instance._document, self._metadata.jmespath_expr)
+        object.__setattr__(instance, self._attr_name, None)
+
+    @property
+    def metadata(self) -> SubModelMetadata:
+        return self._metadata
 
 
 class SchemaModel:
@@ -215,14 +246,14 @@ class SchemaModel:
     """
 
     _schema_properties: dict[str, SchemaProperty[Any]] = {}
-    _sub_models: dict[str, SubModelMetadata] = {}
+    _sub_models: dict[str, SubModelProperty[Any]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
 
         # Initialize with inherited values (copy to avoid mutating parent)
         schema_properties: dict[str, SchemaProperty[Any]] = {}
-        sub_models: dict[str, SubModelMetadata] = {}
+        sub_models: dict[str, SubModelProperty[Any]] = {}
         for base in cls.__mro__[1:]:
             if issubclass(base, SchemaModel):
                 schema_properties.update(base._schema_properties)
@@ -240,11 +271,14 @@ class SchemaModel:
 
         # Process the resolved annotations
         for field_name, annotation in hints.items():
-            base_type, schema_location, data_location = _get_base_type(annotation)
+            base_type, metadata = _get_annotation_metadata(annotation)
 
             # Skip fields without a SchemaLocation
+            schema_location = metadata.get(SchemaLocation)
             if schema_location is None:
                 continue
+
+            data_location = metadata.get(DataLocation)
 
             # Check if this is an optional type (X | None)
             inner_type, is_optional = _is_optional_type(base_type)
@@ -253,12 +287,17 @@ class SchemaModel:
             bare_base_type = get_origin(inner_type) or inner_type
             if isinstance(bare_base_type, type) and issubclass(bare_base_type, (SchemaModel, SchemaList)):
                 data_field = data_location.field_path if data_location else None
-                sub_models[field_name] = SubModelMetadata(
+                sub_model_metadata = SubModelMetadata(
                     model_type=inner_type,
                     jmespath_expr=schema_location.jmespath_expr,
                     data_field=data_field,
                     is_optional=is_optional,
                 )
+                prop = SubModelProperty(sub_model_metadata)
+                # Manually call __set_name__ since setattr doesn't trigger it
+                prop.__set_name__(cls, field_name)
+                setattr(cls, field_name, prop)
+                sub_models[field_name] = prop
             else:
                 # Create a TypeAdapter for the full annotation (preserves Field defaults)
                 type_adapter = TypeAdapter(annotation)
@@ -298,7 +337,8 @@ class SchemaModel:
 
     def _rebuild_models(self) -> None:
         """Rebuild any sub-models to reflect changes in the underlying document."""
-        for sub_model_name, metadata in self._sub_models.items():
+        for sub_model_name, sub_model_prop in self._sub_models.items():
+            metadata = sub_model_prop.metadata
             if metadata.jmespath_expr:
                 sub_document = jmespath.search(metadata.jmespath_expr, self._document)
                 if sub_document is None:
@@ -327,21 +367,17 @@ class SchemaModel:
                 sub_model.validate()
 
     @classmethod
-    async def _data_to_schema(cls, data: Any, context: IContext) -> Any:
-        """Convert data to a dictionary by applying schema properties.
-
-        This base implementation iterates over all schema properties defined on the class
-        and applies their values from the data object to the result dictionary.
-
-        :param data: The data object containing values to convert.
-        :param context: The context used for any data upload operations.
-        :return: The dictionary representation of the data.
-        """
-        builder = SchemaBuilder(cls, context)
+    async def _build_schema(cls, builder: SchemaBuilder, data: Any, exclude: set[str]) -> None:
+        """Build a schema document using the provided SchemaBuilder."""
         for key in cls._schema_properties.keys():
+            if key in exclude:
+                continue
             value = getattr(data, key, None)
             builder.set_property(key, value)
-        for name, metadata in cls._sub_models.items():
+        for name, sub_model_prop in cls._sub_models.items():
+            if name in exclude:
+                continue
+            metadata = sub_model_prop.metadata
             if metadata.data_field:
                 sub_data = getattr(data, metadata.data_field, None)
             elif metadata.is_optional:
@@ -353,7 +389,33 @@ class SchemaModel:
             if sub_data is None and metadata.is_optional:
                 continue
             await builder.set_sub_model_value(name, sub_data)
+
+    @classmethod
+    async def _data_to_schema(cls, data: Any, context: IContext) -> Any:
+        """Convert data to a dictionary by applying schema properties.
+
+        This base implementation iterates over all schema properties defined on the class
+        and applies their values from the data object to the result dictionary.
+
+        :param data: The data object containing values to convert.
+        :param context: The context used for any data upload operations.
+        :return: The dictionary representation of the data.
+        """
+        builder = SchemaBuilder(cls, context)
+        await cls._build_schema(builder, data, exclude=set())
         return builder.document
+
+    async def _build_sub_model(self, name: str, data: Any) -> None:
+        """Rebuild all sub-models from the current document."""
+        metadata = self._sub_models[name].metadata
+        sub_document = await metadata.model_type._data_to_schema(data, context=self._context)
+        if metadata.jmespath_expr:
+            assign_jmespath_value(self._document, metadata.jmespath_expr, sub_document)
+            document = sub_document
+        else:
+            self._document.update(sub_document)
+            document = self._document
+        setattr(self, name, metadata.model_type(self._context, document))
 
     def search(self, expression: str) -> Any:
         """Search the model using a JMESPath expression.

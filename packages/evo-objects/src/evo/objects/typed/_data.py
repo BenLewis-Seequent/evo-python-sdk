@@ -133,16 +133,15 @@ class DataTableAndAttributes(SchemaModel):
         return table_df, attr_df
 
     @classmethod
-    async def _data_to_schema(cls, data: Any, context: IContext) -> Any:
+    async def _build_schema(cls, builder: SchemaBuilder, data: Any, exclude: set[str]) -> Any:
         if not isinstance(data, pd.DataFrame):
             raise ObjectValidationError(f"Input data must be a pandas DataFrame, but got {type(data)}")
 
         # Lookup the metadata of the _table sub-model, as sub-classes may redefine it
-        table_metadata = cls._sub_models["_table"]
+        table_metadata = cls._sub_models["_table"].metadata
         table_type = table_metadata.model_type
         table_df, attr_df = cls._split_dataframe(data, table_type.data_columns)
-
-        builder = SchemaBuilder(cls, context)
         await builder.set_sub_model_value("_table", table_df)
         await builder.set_sub_model_value("attributes", attr_df)
-        return builder.document
+        # Build the rest of the schema
+        await super()._build_schema(builder, data, exclude=exclude | {"_table", "attributes"})

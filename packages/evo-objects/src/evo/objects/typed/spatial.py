@@ -17,9 +17,7 @@ from typing import Annotated, Any, ClassVar
 
 from pydantic import TypeAdapter
 
-from evo.common import IContext
-
-from ._model import SchemaLocation
+from ._model import SchemaBuilder, SchemaLocation
 from .base import BaseObject, BaseObjectData
 from .types import BoundingBox, CoordinateReferenceSystem, EpsgCode
 
@@ -52,11 +50,16 @@ class BaseSpatialObject(BaseObject):
     coordinate_reference_system: Annotated[CoordinateReferenceSystem, SchemaLocation("coordinate_reference_system")]
 
     @classmethod
-    async def _data_to_schema(cls, data: BaseSpatialObjectData, context: IContext) -> dict[str, Any]:
+    async def _build_schema(
+        cls, builder: SchemaBuilder, data: BaseSpatialObjectData, exclude: set[str]
+    ) -> dict[str, Any]:
         """Create a object dictionary suitable for creating a new Geoscience Object."""
-        object_dict = await super()._data_to_schema(data, context)
-        object_dict["bounding_box"] = cls._bbox_type_adapter.dump_python(data.compute_bounding_box())
-        return object_dict
+
+        # Comoute the bounding box from the data
+        builder.set_property("_bounding_box", data.compute_bounding_box())
+
+        # Build the rest of the schema
+        await super()._build_schema(builder, data, exclude=exclude | {"_bounding_box"})
 
     # The bounding box is defined as regular a property so that subclasses can override it if needed
     @property
