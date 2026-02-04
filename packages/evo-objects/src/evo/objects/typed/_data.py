@@ -80,6 +80,7 @@ class DataTableAndAttributes(SchemaModel):
     """
 
     attributes: Annotated[Attributes, SchemaLocation("attributes")]
+    _table_data_field: ClassVar[str | None] = None
     _table: DataTable
 
     @property
@@ -134,13 +135,17 @@ class DataTableAndAttributes(SchemaModel):
 
     @classmethod
     async def _build_schema(cls, builder: SchemaBuilder, data: Any, exclude: set[str]) -> Any:
-        if not isinstance(data, pd.DataFrame):
-            raise ObjectValidationError(f"Input data must be a pandas DataFrame, but got {type(data)}")
+        if cls._table_data_field is not None:
+            df = getattr(data, cls._table_data_field)
+        else:
+            df = data
+        if not isinstance(df, pd.DataFrame):
+            raise ObjectValidationError(f"Input data must be a pandas DataFrame, but got {type(df)}")
 
         # Lookup the metadata of the _table sub-model, as sub-classes may redefine it
         table_metadata = cls._sub_models["_table"].metadata
         table_type = table_metadata.model_type
-        table_df, attr_df = cls._split_dataframe(data, table_type.data_columns)
+        table_df, attr_df = cls._split_dataframe(df, table_type.data_columns)
         await builder.set_sub_model_value("_table", table_df)
         await builder.set_sub_model_value("attributes", attr_df)
         # Build the rest of the schema

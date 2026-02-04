@@ -124,8 +124,8 @@ class Tensor3DGrid(Base3DGrid):
     sub_classification = "tensor-3d-grid"
     creation_schema_version = SchemaVersion(major=1, minor=3, patch=0)
 
-    cells: Annotated[Cells3D, SchemaLocation("")]
-    vertices: Annotated[Vertices3D, SchemaLocation("")]
+    cells: Cells3D
+    vertices: Vertices3D
     cell_sizes_x: Annotated[NumpyFloat1D, SchemaLocation("grid_cells_3d.cell_sizes_x")]
     cell_sizes_y: Annotated[NumpyFloat1D, SchemaLocation("grid_cells_3d.cell_sizes_y")]
     cell_sizes_z: Annotated[NumpyFloat1D, SchemaLocation("grid_cells_3d.cell_sizes_z")]

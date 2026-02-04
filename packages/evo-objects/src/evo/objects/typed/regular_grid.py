@@ -12,14 +12,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated
 
 import pandas as pd
 
 from evo.objects import SchemaVersion
 
 from ._grid import BaseRegular3DGrid, BaseRegular3DGridData, Cells3D, Vertices3D
-from ._model import SchemaLocation
 from .exceptions import ObjectValidationError
 
 __all__ = [
@@ -58,5 +56,5 @@ class Regular3DGrid(BaseRegular3DGrid):
     sub_classification = "regular-3d-grid"
     creation_schema_version = SchemaVersion(major=1, minor=3, patch=0)
 
-    cells: Annotated[Cells3D, SchemaLocation("")]
-    vertices: Annotated[Vertices3D, SchemaLocation("")]
+    cells: Cells3D
+    vertices: Vertices3D

@@ -169,4 +169,4 @@ class RegularMasked3DGrid(BaseRegular3DGrid):
     sub_classification = "regular-masked-3d-grid"
     creation_schema_version = SchemaVersion(major=1, minor=3, patch=0)
 
-    cells: Annotated[MaskedCells, SchemaLocation("")]
+    cells: MaskedCells

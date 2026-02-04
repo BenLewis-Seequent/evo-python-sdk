@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, ClassVar
+from typing import Annotated, ClassVar
 
 import pandas as pd
 
@@ -28,7 +28,7 @@ from evo.objects.utils.table_formats import (
 )
 
 from ._data import DataTable, DataTableAndAttributes
-from ._model import DataLocation, SchemaBuilder, SchemaLocation, SchemaModel
+from ._model import DataAdapter, DataLocation, SchemaLocation
 from .exceptions import ObjectValidationError
 from .spatial import BaseSpatialObject, BaseSpatialObjectData
 from .types import BoundingBox
@@ -40,7 +40,6 @@ __all__ = [
     "TriangleMesh",
     "TriangleMeshData",
     "TrianglePartsData",
-    "Triangles",
     "Vertices",
 ]
 
@@ -145,29 +144,10 @@ class TriangleParts(Parts):
     Parts are made up from chunks of triangle indices.
     """
 
-    _table_data_attribute: ClassVar[str] = "parts"
+    _table_data_field: ClassVar[str] = "parts"
     triangle_indices: Annotated[
         TriangleIndicesTable | None, SchemaLocation("triangle_indices"), DataLocation("triangle_indices")
     ]
-
-    @classmethod
-    async def _build_schema(cls, builder: SchemaBuilder, data: Any, exclude: set[str]) -> None:
-        """Build a schema document using the provided SchemaBuilder."""
-        if isinstance(data, pd.DataFrame):
-            data = TrianglePartsData(parts=data)
-
-        if isinstance(data, TrianglePartsData):
-            # Extract the parts DataFrame and triangle_indices
-            parts_df = data.parts
-            triangle_indices = data.triangle_indices
-            # Build the parts table using parent's logic
-            await super()._build_schema(builder, parts_df, exclude=exclude)
-            # Set the triangle_indices sub-model if provided
-            if triangle_indices is not None:
-                await builder.set_sub_model_value("triangle_indices", triangle_indices)
-        else:
-            # Pass through to parent for other data types
-            await super()._build_schema(builder, data, exclude=exclude)
 
 
 # --- Edges ---
@@ -193,7 +173,7 @@ class Edges(DataTableAndAttributes):
     Optionally, edge parts can be defined.
     """
 
-    _table_data_attribute: ClassVar[str] = "edges"
+    _table_data_field: ClassVar[str | None] = "edges"
     _table: Annotated[EdgeIndicesTable, SchemaLocation("indices")]
     parts: Annotated[Parts | None, SchemaLocation("parts"), DataLocation("edge_parts")]
 
@@ -201,22 +181,6 @@ class Edges(DataTableAndAttributes):
     def num_edges(self) -> int:
         """The number of edges in this mesh."""
         return self._table.length
-
-    @classmethod
-    async def _build_schema(cls, builder: SchemaBuilder, data: Any, exclude: set[str]) -> Any:
-        """Build schema from either a DataFrame or _EdgesData."""
-        if isinstance(data, _EdgesData):
-            # Extract the edges DataFrame and edge_parts
-            edges_df = data.edges
-            edge_parts_df = data.edge_parts
-            # Build the edges table using parent's logic
-            await super()._build_schema(builder, edges_df, exclude=exclude)
-            # Set the edge_parts sub-model if provided
-            if edge_parts_df is not None:
-                await builder.set_sub_model_value("parts", edge_parts_df)
-        else:
-            # Pass through to parent for DataFrame handling
-            await super()._build_schema(builder, data, exclude=exclude)
 
 
 # --- Triangle Data ---
@@ -306,7 +270,7 @@ class Vertices(DataTableAndAttributes):
     Contains the coordinates of each vertex and optional attributes.
     """
 
-    _table: Annotated[VertexCoordinateTable, SchemaLocation("")]
+    _table: VertexCoordinateTable
 
 
 class Indices(DataTableAndAttributes):
@@ -315,51 +279,30 @@ class Indices(DataTableAndAttributes):
     Contains indices into the vertex list defining triangles and optional attributes.
     """
 
-    _table: Annotated[TriangleIndexTable, SchemaLocation("")]
+    _table: TriangleIndexTable
 
 
-class Triangles(SchemaModel):
-    """A dataset representing the triangles of a TriangleMesh.
+def _extract_edges_data(data: TriangleMeshData) -> _EdgesData | None:
+    """Extract edges and edge_parts DataFrames from various input types."""
+    if data.edges is None:
+        return None
+    return _EdgesData(edges=data.edges, edge_parts=data.edge_parts)
 
-    This is the top-level container for the triangles component of the mesh,
-    containing both vertices and triangle indices.
-    """
 
-    vertices: Annotated[Vertices, SchemaLocation("vertices"), DataLocation("vertices")]
-    indices: Annotated[Indices, SchemaLocation("indices"), DataLocation("triangles")]
-
-    @property
-    def num_vertices(self) -> int:
-        """The number of vertices in this mesh."""
-        return self.vertices.length
-
-    @property
-    def num_triangles(self) -> int:
-        """The number of triangles in this mesh."""
-        return self.indices.length
-
-    async def get_vertices_dataframe(self, fb: IFeedback = NoFeedback) -> pd.DataFrame:
-        """Load a DataFrame containing the vertex coordinates and attributes.
-
-        :param fb: Optional feedback object to report download progress.
-        :return: DataFrame with x, y, z coordinates and additional columns for attributes.
-        """
-        return await self.vertices.get_dataframe(fb=fb)
-
-    async def get_indices_dataframe(self, fb: IFeedback = NoFeedback) -> pd.DataFrame:
-        """Load a DataFrame containing the triangle indices and attributes.
-
-        :param fb: Optional feedback object to report download progress.
-        :return: DataFrame with n0, n1, n2 indices and additional columns for attributes.
-        """
-        return await self.indices.get_dataframe(fb=fb)
+def _extract_parts_data(data: TriangleMeshData) -> TrianglePartsData | None:
+    """Extract triangle parts data from various input types."""
+    if data.triangle_parts is None:
+        return None
+    if isinstance(data.triangle_parts, pd.DataFrame):
+        return TrianglePartsData(parts=data.triangle_parts)
+    return data.triangle_parts
 
 
 class TriangleMesh(BaseSpatialObject):
     """A GeoscienceObject representing a mesh composed of triangles.
 
     The triangles are defined by triplets of indices into a vertex list.
-    The object contains a triangles dataset with vertices, indices, and optional attributes
+    The object contains vertices, indices, and optional attributes
     for both vertices and triangles.
 
     Optionally, parts and edges can be defined:
@@ -373,19 +316,20 @@ class TriangleMesh(BaseSpatialObject):
     sub_classification = "triangle-mesh"
     creation_schema_version = SchemaVersion(major=2, minor=2, patch=0)
 
-    triangles: Annotated[Triangles, SchemaLocation("triangles")]
-    parts: Annotated[TriangleParts | None, SchemaLocation("parts"), DataLocation("triangle_parts")]
-    edges: Annotated[Edges | None, SchemaLocation("edges")]
+    vertices: Annotated[Vertices, SchemaLocation("triangles.vertices"), DataLocation("vertices")]
+    indices: Annotated[Indices, SchemaLocation("triangles.indices"), DataLocation("triangles")]
+    parts: Annotated[TriangleParts | None, SchemaLocation("parts"), DataAdapter(_extract_parts_data)]
+    edges: Annotated[Edges | None, SchemaLocation("edges"), DataAdapter(_extract_edges_data)]
 
     @property
     def num_vertices(self) -> int:
         """The number of vertices in this mesh."""
-        return self.triangles.num_vertices
+        return self.vertices.length
 
     @property
     def num_triangles(self) -> int:
         """The number of triangles in this mesh."""
-        return self.triangles.num_triangles
+        return self.indices.length
 
     @property
     def num_edges(self) -> int | None:
@@ -401,31 +345,66 @@ class TriangleMesh(BaseSpatialObject):
             return None
         return self.parts.length
 
-    @classmethod
-    async def _build_schema(cls, builder: SchemaBuilder, data: Any, exclude: set[str]) -> Any:
-        """Build schema from TriangleMeshData, combining edges/edge_parts and handling triangle_parts."""
-        # Handle edges and edge_parts from TriangleMeshData
-        if hasattr(data, "edges") and data.edges is not None:
-            edges_data = _EdgesData(edges=data.edges, edge_parts=data.edge_parts)
-            await builder.set_sub_model_value("edges", edges_data)
-            exclude = exclude | {"edges", "edge_parts"}
+    async def get_vertices_dataframe(self, fb: IFeedback = NoFeedback) -> pd.DataFrame:
+        """Load a DataFrame containing the vertex coordinates and attributes.
 
-        # Handle triangle_parts separately
-        if hasattr(data, "triangle_parts") and data.triangle_parts is not None:
-            await builder.set_sub_model_value("parts", data.triangle_parts)
-            exclude = exclude | {"triangle_parts"}
+        :param fb: Optional feedback object to report download progress.
+        :return: DataFrame with x, y, z coordinates and additional columns for attributes.
+        """
+        return await self.vertices.get_dataframe(fb=fb)
 
-        # Build the rest of the schema
-        await super()._build_schema(builder, data, exclude=exclude)
+    async def set_vertices_dataframe(self, data: pd.DataFrame, fb: IFeedback = NoFeedback) -> None:
+        """Set the vertices data on this mesh.
 
-    async def set_edges(self, data: pd.DataFrame, parts: pd.DataFrame | None = None) -> None:
+        :param data: DataFrame containing the vertex coordinates and attributes.
+        :param fb: Optional feedback object to report upload progress.
+        """
+        await self.vertices.set_dataframe(data, fb=fb)
+
+    async def get_indices_dataframe(self, fb: IFeedback = NoFeedback) -> pd.DataFrame:
+        """Load a DataFrame containing the triangle indices and attributes.
+
+        :param fb: Optional feedback object to report download progress.
+        :return: DataFrame with n0, n1, n2 indices and additional columns for attributes.
+        """
+        return await self.indices.get_dataframe(fb=fb)
+
+    async def set_indices_dataframe(self, data: pd.DataFrame, fb: IFeedback = NoFeedback) -> None:
+        """Set the triangle indices data on this mesh.
+
+        :param data: DataFrame containing the triangle indices and attributes.
+        :param fb: Optional feedback object to report upload progress.
+        """
+        await self.indices.set_dataframe(data, fb=fb)
+
+    async def get_edges_dataframe(self, fb: IFeedback = NoFeedback) -> pd.DataFrame | None:
+        """Load a DataFrame containing the edge definitions.
+
+        :param fb: Optional feedback object to report download progress.
+        :return: DataFrame with start, end indices and additional columns for attributes, or None if edges are not defined.
+        """
+        if self.edges is None:
+            return None
+        return await self.edges.get_dataframe(fb=fb)
+
+    async def set_edges_dataframe(self, data: pd.DataFrame, parts: pd.DataFrame | None = None) -> None:
         """Set the edges data on this mesh.
 
         :param data: EdgesData containing the edge definitions.
         """
         await self._build_sub_model("edges", _EdgesData(edges=data, edge_parts=parts))
 
-    async def set_parts(
+    async def get_parts_dataframe(self, fb: IFeedback = NoFeedback) -> pd.DataFrame | None:
+        """Load a DataFrame containing the parts definitions.
+
+        :param fb: Optional feedback object to report download progress.
+        :return: DataFrame with offset, count columns and additional columns for attributes, or None if parts are not defined.
+        """
+        if self.parts is None:
+            return None
+        return await self.parts.get_dataframe(fb=fb)
+
+    async def set_parts_dataframe(
         self, data: pd.DataFrame, triangle_indices: pd.DataFrame | None = None, fb: IFeedback = NoFeedback
     ) -> None:
         """Set the parts data on this mesh.

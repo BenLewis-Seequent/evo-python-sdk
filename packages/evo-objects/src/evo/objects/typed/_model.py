@@ -12,10 +12,23 @@
 from __future__ import annotations
 
 import copy
+import operator
 import types
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Generic, TypeVar, Union, get_args, get_origin, get_type_hints, overload
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+    overload,
+)
 
 from pydantic import TypeAdapter
 
@@ -62,7 +75,7 @@ class SchemaLocation:
     """The JMESPath expression to locate this field in the document."""
 
 
-@dataclass
+@dataclass(frozen=True)
 class DataLocation:
     """Metadata for annotating a field's location within a data classes used to generate Geoscience Object data."""
 
@@ -70,7 +83,15 @@ class DataLocation:
     """The path to the field within the data class."""
 
 
-@dataclass
+@dataclass(frozen=True)
+class DataAdapter:
+    """Metadata for annotating a field that requires custom data access logic."""
+
+    getter: Callable[[Any], Any]
+    """A function to get the data for this field."""
+
+
+@dataclass(frozen=True)
 class SubModelMetadata:
     """Metadata for sub-model fields within a SchemaModel."""
 
@@ -80,8 +101,8 @@ class SubModelMetadata:
     jmespath_expr: str | None
     """The JMESPath expression locating the sub-model in the document."""
 
-    data_field: str | None
-    """The field name in the data class for this sub-model."""
+    data_adapter: Callable[[Any], Any] | None = None
+    """Function to extract the sub-model data from the parent data object."""
 
     is_optional: bool = False
     """Whether this sub-model is optional (can be None)."""
@@ -245,8 +266,8 @@ class SchemaModel:
     automatically created for nested SchemaModel/SchemaList fields.
     """
 
-    _schema_properties: dict[str, SchemaProperty[Any]] = {}
-    _sub_models: dict[str, SubModelProperty[Any]] = {}
+    _schema_properties: ClassVar[dict[str, SchemaProperty[Any]]] = {}
+    _sub_models: ClassVar[dict[str, SubModelProperty[Any]]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -271,14 +292,22 @@ class SchemaModel:
 
         # Process the resolved annotations
         for field_name, annotation in hints.items():
+            if get_origin(annotation) is ClassVar:
+                continue  # Skip ClassVar fields
             base_type, metadata = _get_annotation_metadata(annotation)
 
-            # Skip fields without a SchemaLocation
             schema_location = metadata.get(SchemaLocation)
-            if schema_location is None:
-                continue
-
-            data_location = metadata.get(DataLocation)
+            data_adapter = metadata.get(DataAdapter)
+            if data_adapter is None:
+                data_location = metadata.get(DataLocation)
+                if data_location is not None:
+                    data_adapter_function = operator.attrgetter(data_location.field_path)
+                else:
+                    # Identity function if no DataAdapter or DataLocation is provided
+                    def data_adapter_function(data):
+                        return data
+            else:
+                data_adapter_function = data_adapter.getter
 
             # Check if this is an optional type (X | None)
             inner_type, is_optional = _is_optional_type(base_type)
@@ -286,11 +315,10 @@ class SchemaModel:
             # To robustly check for SchemaModel/SchemaList, we need to strip any generic or Annotated wrappers
             bare_base_type = get_origin(inner_type) or inner_type
             if isinstance(bare_base_type, type) and issubclass(bare_base_type, (SchemaModel, SchemaList)):
-                data_field = data_location.field_path if data_location else None
                 sub_model_metadata = SubModelMetadata(
                     model_type=inner_type,
-                    jmespath_expr=schema_location.jmespath_expr,
-                    data_field=data_field,
+                    jmespath_expr=schema_location.jmespath_expr if schema_location else None,
+                    data_adapter=data_adapter_function,
                     is_optional=is_optional,
                 )
                 prop = SubModelProperty(sub_model_metadata)
@@ -299,6 +327,10 @@ class SchemaModel:
                 setattr(cls, field_name, prop)
                 sub_models[field_name] = prop
             else:
+                if schema_location is None:
+                    raise ValueError(
+                        f"Non-submodel field '{field_name}' in '{cls.__name__}' is missing a SchemaLocation annotation."
+                    )
                 # Create a TypeAdapter for the full annotation (preserves Field defaults)
                 type_adapter = TypeAdapter(annotation)
 
@@ -378,13 +410,7 @@ class SchemaModel:
             if name in exclude:
                 continue
             metadata = sub_model_prop.metadata
-            if metadata.data_field:
-                sub_data = getattr(data, metadata.data_field, None)
-            elif metadata.is_optional:
-                # Optional sub-model with no data field - skip it
-                continue
-            else:
-                sub_data = data
+            sub_data = metadata.data_adapter(data)
             # Skip optional sub-models when their data is None
             if sub_data is None and metadata.is_optional:
                 continue

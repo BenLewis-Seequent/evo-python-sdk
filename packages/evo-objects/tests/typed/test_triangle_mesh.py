@@ -89,10 +89,10 @@ class TestTriangleMesh(TestWithConnector):
         self.assertEqual(result.num_vertices, 4)
         self.assertEqual(result.num_triangles, 4)
 
-        vertex_df = await result.triangles.get_vertices_dataframe()
+        vertex_df = await result.get_vertices_dataframe()
         pd.testing.assert_frame_equal(vertex_df, self.example_mesh.vertices)
 
-        triangle_df = await result.triangles.get_indices_dataframe()
+        triangle_df = await result.get_indices_dataframe()
         pd.testing.assert_frame_equal(triangle_df, self.example_mesh.triangles)
 
     @parameterized.expand([BaseObject, TriangleMesh])
@@ -131,7 +131,7 @@ class TestTriangleMesh(TestWithConnector):
         self.assertEqual(result.num_vertices, 3)
         self.assertEqual(result.num_triangles, 1)
 
-        actual_vertices = await result.triangles.get_vertices_dataframe()
+        actual_vertices = await result.get_vertices_dataframe()
         pd.testing.assert_frame_equal(actual_vertices, vertices)
 
     @parameterized.expand([BaseObject, TriangleMesh])
@@ -160,7 +160,7 @@ class TestTriangleMesh(TestWithConnector):
             self.assertEqual(result.num_vertices, 4)
             self.assertEqual(result.num_triangles, 4)
 
-            vertex_df = await result.triangles.get_vertices_dataframe()
+            vertex_df = await result.get_vertices_dataframe()
             pd.testing.assert_frame_equal(vertex_df, self.example_mesh.vertices)
 
     def test_bounding_box_from_data(self):
@@ -474,7 +474,7 @@ class TestTriangleMesh(TestWithConnector):
         self.assertIsNotNone(result.edges.parts)
         self.assertEqual(result.edges.parts.num_parts, 2)
 
-    async def test_set_edges_simple(self):
+    async def test_set_edges_dataframe_simple(self):
         """Test setting edges on a triangle mesh."""
         with self._mock_geoscience_objects():
             result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
@@ -492,13 +492,13 @@ class TestTriangleMesh(TestWithConnector):
 
         # Set edges
         with self._mock_geoscience_objects():
-            await result.set_edges(edge_indices)
+            await result.set_edges_dataframe(edge_indices)
 
         # Now edges should be set
         self.assertIsNotNone(result.edges)
         self.assertEqual(result.num_edges, 6)
 
-    async def test_set_edges_with_parts(self):
+    async def test_set_edges_dataframe_with_parts(self):
         """Test setting edges with edge parts on a triangle mesh."""
         with self._mock_geoscience_objects():
             result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
@@ -519,7 +519,7 @@ class TestTriangleMesh(TestWithConnector):
 
         # Set edges with parts
         with self._mock_geoscience_objects():
-            await result.set_edges(edge_indices, parts=edge_chunks)
+            await result.set_edges_dataframe(edge_indices, parts=edge_chunks)
 
         # Verify edges and parts are set
         self.assertIsNotNone(result.edges)
@@ -527,7 +527,7 @@ class TestTriangleMesh(TestWithConnector):
         self.assertIsNotNone(result.edges.parts)
         self.assertEqual(result.edges.parts.length, 2)
 
-    async def test_set_parts(self):
+    async def test_set_parts_dataframe(self):
         """Test setting parts on a triangle mesh."""
         with self._mock_geoscience_objects():
             result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
@@ -550,7 +550,7 @@ class TestTriangleMesh(TestWithConnector):
 
         # Set parts
         with self._mock_geoscience_objects():
-            await result.set_parts(chunks, triangle_indices)
+            await result.set_parts_dataframe(chunks, triangle_indices)
 
         # Now parts should be set
         self.assertIsNotNone(result.parts)
@@ -569,7 +569,7 @@ class TestTriangleMesh(TestWithConnector):
             }
         )
         with self._mock_geoscience_objects():
-            await result.set_edges(edge_indices)
+            await result.set_edges_dataframe(edge_indices)
 
         self.assertIsNotNone(result.edges)
 
@@ -596,7 +596,7 @@ class TestTriangleMesh(TestWithConnector):
             }
         )
         with self._mock_geoscience_objects():
-            await result.set_parts(chunks, triangle_indices)
+            await result.set_parts_dataframe(chunks, triangle_indices)
 
         self.assertIsNotNone(result.parts)
 
@@ -618,7 +618,7 @@ class TestTriangleMesh(TestWithConnector):
             }
         )
         with self._mock_geoscience_objects():
-            await result.set_edges(edge_indices)
+            await result.set_edges_dataframe(edge_indices)
 
         self.assertIsNotNone(result.edges)
 
@@ -646,7 +646,7 @@ class TestTriangleMesh(TestWithConnector):
             }
         )
         with self._mock_geoscience_objects():
-            await result.set_parts(chunks, triangle_indices)
+            await result.set_parts_dataframe(chunks, triangle_indices)
 
         self.assertIsNotNone(result.parts)
 
@@ -656,12 +656,12 @@ class TestTriangleMesh(TestWithConnector):
         self.assertIsNone(result.parts)
         self.assertNotIn("parts", result._document)
 
-    async def test_set_edges_validation_mismatched_columns(self):
-        """Test that set_edges validates column names."""
+    async def test_set_edges_dataframe_validation_mismatched_columns(self):
+        """Test that set_edges_dataframe validates column names."""
         with self._mock_geoscience_objects():
             result = await TriangleMesh.create(context=self.context, data=self.example_mesh)
 
-        # Wrong column names should raise an error during set_edges
+        # Wrong column names should raise an error during set_edges_dataframe
         edge_df = pd.DataFrame(
             {
                 "vertex1": [0, 1, 2],  # Wrong column name
@@ -670,9 +670,9 @@ class TestTriangleMesh(TestWithConnector):
         )
         with self._mock_geoscience_objects():
             with self.assertRaises(Exception):  # Should raise an error about missing columns
-                await result.set_edges(edge_df)
+                await result.set_edges_dataframe(edge_df)
 
-    async def test_set_parts_validation_mismatched_columns(self):
+    async def test_set_parts_dataframe_validation_mismatched_columns(self):
         """Test that TrianglePartsData validates column names."""
         from evo.objects.typed import TrianglePartsData
 

@@ -35,7 +35,6 @@ from .triangle_mesh import (
     TriangleMesh,
     TriangleMeshData,
     TrianglePartsData,
-    Triangles,
     Vertices,
 )
 from .types import BoundingBox, CoordinateReferenceSystem, EpsgCode, Point3, Rotation, Size3d, Size3i
@@ -66,6 +65,5 @@ __all__ = [
     "TriangleMesh",
     "TriangleMeshData",
     "TrianglePartsData",
-    "Triangles",
     "Vertices",
 ]
