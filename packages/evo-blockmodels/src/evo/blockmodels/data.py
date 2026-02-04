@@ -14,6 +14,7 @@ from datetime import datetime
 from uuid import UUID
 
 from evo.common import ResourceMetadata
+from evo.common.styles.html import STYLESHEET, build_nested_table, build_title, build_table_row, build_table_row_vtop
 from evo.workspaces import ServiceUser
 
 from .endpoints.models import BBox, BBoxXYZ, Column, RotationAxis
@@ -230,3 +231,57 @@ class Version:
     """
     Columns within this version
     """
+
+    def __repr__(self) -> str:
+        """Return a concise string representation of the version."""
+        col_names = [c.title for c in self.columns]
+        bbox_str = ""
+        if self.bbox:
+            bbox_str = f", bbox=i[{self.bbox.i_minmax.min}-{self.bbox.i_minmax.max}] j[{self.bbox.j_minmax.min}-{self.bbox.j_minmax.max}] k[{self.bbox.k_minmax.min}-{self.bbox.k_minmax.max}]"
+        return (
+            f"Version(id={self.version_id}, "
+            f"created={self.created_at.strftime('%Y-%m-%d %H:%M:%S')}, "
+            f"by={self.created_by.name or self.created_by.email}{bbox_str}, "
+            f"columns={col_names})"
+        )
+
+    def _repr_html_(self) -> str:
+        """Return an HTML representation for Jupyter notebooks."""
+        # Build columns table
+        col_rows = [[col.title, col.data_type.value, col.unit_id or "-"] for col in self.columns]
+        columns_html = build_nested_table(["Title", "Type", "Unit"], col_rows)
+
+        # Build bbox table
+        bbox_html = "-"
+        if self.bbox:
+            bbox_rows = [
+                ["i", self.bbox.i_minmax.min, self.bbox.i_minmax.max],
+                ["j", self.bbox.j_minmax.min, self.bbox.j_minmax.max],
+                ["k", self.bbox.k_minmax.min, self.bbox.k_minmax.max],
+            ]
+            bbox_html = build_nested_table(["Axis", "Min", "Max"], bbox_rows)
+
+        # Build table rows
+        rows_html = "".join([
+            build_table_row("Version ID", str(self.version_id)),
+            build_table_row("Version UUID", str(self.version_uuid)),
+            build_table_row("Block Model UUID", str(self.bm_uuid)),
+            build_table_row("Parent Version", str(self.parent_version_id) if self.parent_version_id else "-"),
+            build_table_row("Base Version", str(self.base_version_id) if self.base_version_id else "-"),
+            build_table_row("Created At", self.created_at.strftime("%Y-%m-%d %H:%M:%S")),
+            build_table_row("Created By", self.created_by.name or self.created_by.email or str(self.created_by.id)),
+            build_table_row("Comment", self.comment if self.comment else "-"),
+            build_table_row_vtop("Bounding Box", bbox_html),
+            build_table_row_vtop("Columns", columns_html),
+        ])
+
+        html = f"""{STYLESHEET}
+<div class="evo">
+{build_title("📦 Block Model Version")}
+<table>
+{rows_html}
+</table>
+</div>
+"""
+        return html
+
