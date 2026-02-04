@@ -126,14 +126,22 @@ class TestVersionRepr(unittest.TestCase):
         self.assertIn("g/t", html)
 
     def test_repr_html_bbox_formatting(self) -> None:
-        """Test that bbox is formatted nicely in HTML."""
+        """Test that bbox is formatted as a nice table in HTML."""
         version = self._create_test_version()
         html = version._repr_html_()
 
-        # Bbox should be formatted as ranges
-        self.assertIn("i: [0, 9]", html)
-        self.assertIn("j: [0, 9]", html)
-        self.assertIn("k: [0, 4]", html)
+        # Bbox should be formatted as a table with headers
+        self.assertIn("<th>Axis</th>", html)
+        self.assertIn("<th>Min</th>", html)
+        self.assertIn("<th>Max</th>", html)
+        # Should contain the axis rows
+        self.assertIn("<td>i</td>", html)
+        self.assertIn("<td>j</td>", html)
+        self.assertIn("<td>k</td>", html)
+        # Should contain the values (build_nested_table formats numbers with 2 decimal places)
+        self.assertIn("<td>0.00</td>", html)
+        self.assertIn("<td>9.00</td>", html)
+        self.assertIn("<td>4.00</td>", html)
 
     def test_repr_html_without_bbox(self) -> None:
         """Test that _repr_html_ works when bbox is None."""
@@ -153,13 +161,13 @@ class TestVersionRepr(unittest.TestCase):
         # Comment row should exist with dash
         self.assertIn("Comment", html)
 
-    def test_repr_html_columns_alternating_rows(self) -> None:
-        """Test that columns table has alternating row colors."""
+    def test_repr_html_columns_nested_table(self) -> None:
+        """Test that columns are displayed as a nested table."""
         version = self._create_test_version()
         html = version._repr_html_()
 
-        # Should have alternating row class
-        self.assertIn('class="alt-row"', html)
+        # Should have nested table class
+        self.assertIn('class="nested"', html)
 
     def test_repr_with_email_fallback(self) -> None:
         """Test that repr falls back to email when name is None."""

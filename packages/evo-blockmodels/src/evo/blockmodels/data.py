@@ -14,7 +14,7 @@ from datetime import datetime
 from uuid import UUID
 
 from evo.common import ResourceMetadata
-from evo.common.styles.html import STYLESHEET, build_title, build_table_row, build_table_row_vtop
+from evo.common.styles.html import STYLESHEET, build_nested_table, build_title, build_table_row, build_table_row_vtop
 from evo.workspaces import ServiceUser
 
 from .endpoints.models import BBox, BBoxXYZ, Column, RotationAxis
@@ -248,24 +248,18 @@ class Version:
     def _repr_html_(self) -> str:
         """Return an HTML representation for Jupyter notebooks."""
         # Build columns table
-        col_headers = "<tr><th>Title</th><th>Type</th><th>Unit</th></tr>"
-        col_rows = []
-        for i, col in enumerate(self.columns):
-            row_class = 'class="alt-row"' if i % 2 == 1 else ""
-            unit_str = col.unit_id if col.unit_id else "-"
-            col_rows.append(
-                f'<tr {row_class}><td>{col.title}</td><td>{col.data_type.value}</td><td>{unit_str}</td></tr>'
-            )
-        columns_html = f'<table class="nested">{col_headers}{"".join(col_rows)}</table>'
+        col_rows = [[col.title, col.data_type.value, col.unit_id or "-"] for col in self.columns]
+        columns_html = build_nested_table(["Title", "Type", "Unit"], col_rows)
 
-        # Build bbox string
-        bbox_str = "-"
+        # Build bbox table
+        bbox_html = "-"
         if self.bbox:
-            bbox_str = (
-                f"i: [{self.bbox.i_minmax.min}, {self.bbox.i_minmax.max}], "
-                f"j: [{self.bbox.j_minmax.min}, {self.bbox.j_minmax.max}], "
-                f"k: [{self.bbox.k_minmax.min}, {self.bbox.k_minmax.max}]"
-            )
+            bbox_rows = [
+                ["i", self.bbox.i_minmax.min, self.bbox.i_minmax.max],
+                ["j", self.bbox.j_minmax.min, self.bbox.j_minmax.max],
+                ["k", self.bbox.k_minmax.min, self.bbox.k_minmax.max],
+            ]
+            bbox_html = build_nested_table(["Axis", "Min", "Max"], bbox_rows)
 
         # Build table rows
         rows_html = "".join([
@@ -277,7 +271,7 @@ class Version:
             build_table_row("Created At", self.created_at.strftime("%Y-%m-%d %H:%M:%S")),
             build_table_row("Created By", self.created_by.name or self.created_by.email or str(self.created_by.id)),
             build_table_row("Comment", self.comment if self.comment else "-"),
-            build_table_row("Bounding Box", bbox_str),
+            build_table_row_vtop("Bounding Box", bbox_html),
             build_table_row_vtop("Columns", columns_html),
         ])
 
