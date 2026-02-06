@@ -77,8 +77,12 @@ manager = await ServiceManagerWidget.with_auth_code(
 > *A browser window opens for authentication. After login, select your organization, hub, and workspace from the dropdowns.*
 
 ```python
-# Load an object by UUID
-from evo.objects.typed import object_from_uuid
+# Load an object by file path or UUID
+from evo.objects.typed import object_from_uuid, object_from_path
+
+obj await object_from_path(manager, "<your-object-path>")
+
+# OR
 
 obj = await object_from_uuid(manager, "<your-object-uuid>")
 obj  # Displays object info with links to Evo Portal and Viewer
@@ -101,9 +105,7 @@ df.head()
 > | 1 | 10590.21 | 100615.43 | 220.15 | 8.3 |
 > | ... | ... | ... | ... | ... | ... | ... |
 
-Typed objects like `PointSet`, `BlockModel`, and `Variogram` provide pretty-printed output in Jupyter with clickable links to view your data in Evo. Use `ObjectSearchWidget` to find objects by name when you don't have the UUID.
-
-For complete setup instructions and more examples, see the [samples/README.md](samples/README.md).
+Typed objects like `PointSet`, `BlockModel`, and `Variogram` provide pretty-printed output in Jupyter with clickable links to view your data in Evo. To determine the path or UUID of an object, visit the [Evo Portal](www.evo.seequent.com) or use the `ObjectSearchWidget`.
 
 
 ## Getting started with Evo code samples
