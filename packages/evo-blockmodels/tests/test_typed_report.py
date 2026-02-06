@@ -12,7 +12,7 @@
 import uuid
 from datetime import datetime
 
-from evo.blockmodels.typed import (
+from evo.blockmodels import (
     Aggregation,
     MassUnits,
     Report,

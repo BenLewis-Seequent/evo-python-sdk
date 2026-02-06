@@ -18,10 +18,9 @@ from unittest import mock
 import pandas as pd
 import pyarrow
 
-from evo.blockmodels import RegularBlockModel, RegularBlockModelData
+from evo.blockmodels import Point3, RegularBlockModel, RegularBlockModelData, Size3d, Size3i
 from evo.blockmodels.endpoints import models
 from evo.blockmodels.endpoints.models import JobResponse, JobStatus, RotationAxis
-from evo.blockmodels.typed import Point3, Size3d, Size3i
 from evo.common import ServiceUser, StaticContext
 from evo.common.data import HTTPHeaderDict, RequestMethod
 from evo.common.test_tools import BASE_URL, MockResponse, TestWithConnector, TestWithStorage
@@ -583,7 +582,7 @@ class TestTypedTypes(TestWithConnector):
 
     def test_bounding_box_from_origin_and_size(self) -> None:
         """Test BoundingBox.from_origin_and_size class method."""
-        from evo.blockmodels.typed import BoundingBox
+        from evo.blockmodels import BoundingBox
 
         bbox = BoundingBox.from_origin_and_size(
             origin=Point3(0, 0, 0),
