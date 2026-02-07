@@ -1,0 +1,96 @@
+/* Object Search Widget Styles */
+.evo-object-search-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.evo-object-search-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.evo-object-search-input {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 400px;
+}
+
+.evo-object-search-input:focus {
+    outline: none;
+    border-color: #265C7F;
+    box-shadow: 0 0 0 2px rgba(38, 92, 127, 0.2);
+}
+
+.evo-object-search-label {
+    font-weight: 500;
+    color: #333;
+    min-width: 60px;
+}
+
+.evo-object-search-type-select {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 200px;
+}
+
+.evo-object-search-type-select:focus {
+    outline: none;
+    border-color: #265C7F;
+    box-shadow: 0 0 0 2px rgba(38, 92, 127, 0.2);
+}
+
+.evo-object-search-results-select {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 500px;
+}
+
+.evo-object-search-results-select:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.evo-object-search-results-select:focus {
+    outline: none;
+    border-color: #265C7F;
+    box-shadow: 0 0 0 2px rgba(38, 92, 127, 0.2);
+}
+
+.evo-object-search-loading {
+    color: #666;
+    font-style: italic;
+}
+
+.evo-object-search-status {
+    color: #666;
+    font-size: 13px;
+}
+
+.evo-object-search-metadata {
+    width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    background-color: #f8f9fa;
+    font-family: monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.evo-object-search-metadata:empty {
+    display: none;
+}
