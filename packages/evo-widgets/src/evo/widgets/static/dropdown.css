@@ -1,0 +1,47 @@
+/* Dropdown Selector Widget Styles */
+.evo-dropdown-widget {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 5px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.evo-dropdown-label {
+    font-weight: 500;
+    color: #333;
+    min-width: 100px;
+}
+
+.evo-dropdown-select {
+    padding: 6px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    min-width: 200px;
+    cursor: pointer;
+}
+
+.evo-dropdown-select:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.evo-dropdown-select:focus {
+    outline: none;
+    border-color: #265C7F;
+    box-shadow: 0 0 0 2px rgba(38, 92, 127, 0.2);
+}
+
+.evo-dropdown-loading {
+    width: 20px;
+    height: 20px;
+    display: none;
+}
+
+.evo-dropdown-loading.visible {
+    display: block;
+}

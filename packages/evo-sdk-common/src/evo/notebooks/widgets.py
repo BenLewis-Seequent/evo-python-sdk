@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import warnings
 from collections.abc import Iterator
 from typing import Any, Generic, TypeVar, cast
 from uuid import UUID
@@ -60,6 +61,12 @@ class DropdownSelectorWidget(widgets.HBox, Generic[T]):
     UNSELECTED: tuple[str, T]
 
     def __init__(self, label: str, env: DotEnv) -> None:
+        warnings.warn(
+            "evo.notebooks.DropdownSelectorWidget is deprecated. "
+            "Use evo.widgets.DropdownSelectorWidget instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._env = env
         self.dropdown_widget = widgets.Dropdown(
             options=[self.UNSELECTED],
@@ -240,6 +247,12 @@ class ServiceManagerWidget(widgets.HBox, IContext, metaclass=_ServiceManagerWidg
         :param discovery_url: The URL of the Evo Discovery service.
         :param cache: The cache to use for storing tokens and other data.
         """
+        warnings.warn(
+            "evo.notebooks.ServiceManagerWidget is deprecated. "
+            "Use evo.widgets.ServiceManagerWidget instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._authorizer = authorizer
         self._cache = cache
         self._service_manager = ServiceManager(
@@ -494,6 +507,12 @@ class FeedbackWidget(IFeedback):
         """
         :param label: The label for the feedback widget.
         """
+        warnings.warn(
+            "evo.notebooks.FeedbackWidget is deprecated. "
+            "Use evo.widgets.FeedbackWidget instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         label = widgets.Label(label)
         self._progress = widgets.FloatProgress(value=0, min=0, max=1, style={"bar_color": "#265C7F"})
         self._progress.layout.width = "400px"
@@ -572,6 +591,12 @@ class ObjectSearchWidget(widgets.VBox):
         :param object_type: Optional object type filter (e.g., "pointset", "block-model").
         :param auto_display: Whether to automatically display the widget (default True).
         """
+        warnings.warn(
+            "evo.notebooks.ObjectSearchWidget is deprecated. "
+            "Use evo.widgets.ObjectSearchWidget instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._context = context
         self._object_type = object_type
         self._cached_objects: list[Any] = []  # List of ObjectMetadata
