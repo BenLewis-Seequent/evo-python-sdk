@@ -29,29 +29,35 @@ __all__ = [
 
 
 def _rotation_matrix(dip_azimuth: float, dip: float, pitch: float) -> NDArray[np.floating[Any]]:
-    """Create a 3D rotation matrix from Geoscience object convention angles."""
+    """Create a 3D rotation matrix from Geoscience object convention angles.
+
+    Uses clockwise rotation convention (looking down the positive axis):
+    - Azimuth: clockwise rotation around Z axis (from North toward East)
+    - Dip: clockwise rotation around X axis (tilting down toward +Y)
+    - Pitch: clockwise rotation around Z axis (in the dipping plane)
+    """
     az = np.radians(dip_azimuth)
     d = np.radians(dip)
     p = np.radians(pitch)
 
-    # Rz(azimuth) - first rotation
+    # Rz(azimuth) - clockwise rotation around Z
     rz_az = np.array([
-        [np.cos(az), -np.sin(az), 0],
-        [np.sin(az), np.cos(az), 0],
+        [np.cos(az), np.sin(az), 0],
+        [-np.sin(az), np.cos(az), 0],
         [0, 0, 1],
     ])
 
-    # Rx(dip) - second rotation
+    # Rx(dip) - clockwise rotation around X
     rx_dip = np.array([
         [1, 0, 0],
-        [0, np.cos(d), -np.sin(d)],
-        [0, np.sin(d), np.cos(d)],
+        [0, np.cos(d), np.sin(d)],
+        [0, -np.sin(d), np.cos(d)],
     ])
 
-    # Rz(pitch) - third rotation
+    # Rz(pitch) - clockwise rotation around Z
     rz_pitch = np.array([
-        [np.cos(p), -np.sin(p), 0],
-        [np.sin(p), np.cos(p), 0],
+        [np.cos(p), np.sin(p), 0],
+        [-np.sin(p), np.cos(p), 0],
         [0, 0, 1],
     ])
 
