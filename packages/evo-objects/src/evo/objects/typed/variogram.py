@@ -21,14 +21,12 @@ from evo.objects import SchemaVersion
 
 from ._model import SchemaLocation
 from .base import BaseObjectData, ConstructableObject
+from .types import Ellipsoid, EllipsoidRanges, Rotation
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from .ellipsoid import Ellipsoid
-
 __all__ = [
-    "Anisotropy",
     "CubicStructure",
     "EllipsoidRanges",
     "ExponentialStructure",
@@ -40,71 +38,8 @@ __all__ = [
     "Variogram",
     "VariogramCurveData",
     "VariogramData",
-    "VariogramRotation",
     "VariogramStructure",
 ]
-
-
-@dataclass(frozen=True, kw_only=True)
-class EllipsoidRanges:
-    """Ellipsoid ranges defining the spatial extent of correlation in each direction."""
-
-    major: float
-    """Range in the major (longest) direction."""
-
-    semi_major: float
-    """Range in the semi-major (intermediate) direction."""
-
-    minor: float
-    """Range in the minor (shortest) direction."""
-
-    def to_dict(self) -> dict[str, float]:
-        """Convert to dictionary format for the schema."""
-        return {
-            "major": self.major,
-            "semi_major": self.semi_major,
-            "minor": self.minor,
-        }
-
-
-@dataclass(frozen=True, kw_only=True)
-class VariogramRotation:
-    """Rotation angles for variogram anisotropy using Leapfrog convention."""
-
-    dip_azimuth: float = 0.0
-    """Azimuth of the dip direction in degrees (0-360)."""
-
-    dip: float = 0.0
-    """Dip angle in degrees (0-90)."""
-
-    pitch: float = 0.0
-    """Pitch/rake angle in degrees."""
-
-    def to_dict(self) -> dict[str, float]:
-        """Convert to dictionary format for the schema."""
-        return {
-            "dip_azimuth": self.dip_azimuth,
-            "dip": self.dip,
-            "pitch": self.pitch,
-        }
-
-
-@dataclass(frozen=True, kw_only=True)
-class Anisotropy:
-    """Anisotropy definition combining ellipsoid ranges and rotation."""
-
-    ellipsoid_ranges: EllipsoidRanges
-    """The ranges of spatial correlation in each direction."""
-
-    rotation: VariogramRotation = field(default_factory=lambda: VariogramRotation())
-    """The rotation of the anisotropy ellipsoid."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary format for the schema."""
-        return {
-            "ellipsoid_ranges": self.ellipsoid_ranges.to_dict(),
-            "rotation": self.rotation.to_dict(),
-        }
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -114,8 +49,8 @@ class VariogramStructure:
     contribution: float
     """The contribution of this structure to the total variance."""
 
-    anisotropy: Anisotropy
-    """The anisotropy definition for this structure."""
+    anisotropy: Ellipsoid
+    """The anisotropy ellipsoid for this structure."""
 
     variogram_type: str = field(init=False)
     """The type of variogram structure (set by subclasses)."""
@@ -128,10 +63,10 @@ class VariogramStructure:
             "anisotropy": self.anisotropy.to_dict(),
         }
 
-    def to_ellipsoid(self) -> "Ellipsoid":
-        """Convert this structure's anisotropy to an Ellipsoid for visualization or search.
+    def to_ellipsoid(self) -> Ellipsoid:
+        """Return this structure's anisotropy ellipsoid.
 
-        Returns an Ellipsoid from evo.compute.tasks that can be used for:
+        Returns the Ellipsoid that can be used for:
         - 3D visualization with surface_points() or wireframe_points()
         - Creating search ellipsoids via scaled()
         - Kriging search neighborhoods
@@ -147,23 +82,7 @@ class VariogramStructure:
             >>> x, y, z = var_ell.surface_points(center=(100, 200, 50))
             >>> mesh = go.Mesh3d(x=x, y=y, z=z, alphahull=0, opacity=0.3)
         """
-        from .ellipsoid import Ellipsoid, EllipsoidRanges as EllipsoidRangesObj, Rotation
-
-        ranges = self.anisotropy.ellipsoid_ranges
-        rotation = self.anisotropy.rotation
-
-        return Ellipsoid(
-            ranges=EllipsoidRangesObj(
-                major=ranges.major,
-                semi_major=ranges.semi_major,
-                minor=ranges.minor,
-            ),
-            rotation=Rotation(
-                dip_azimuth=rotation.dip_azimuth,
-                dip=rotation.dip,
-                pitch=rotation.pitch,
-            ),
-        )
+        return self.anisotropy
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -341,7 +260,7 @@ def _evaluate_structure(
             alpha = 3
         gamma = contribution * (1 - (1 + h_norm**2) ** (-alpha / 2))
     else:
-        gamma = np.full_like(h, contribution)
+        raise KeyError("Unsupported structure type")
 
     return gamma
 
@@ -370,9 +289,9 @@ class VariogramData(BaseObjectData):
         ...     structures=[
         ...         SphericalStructure(
         ...             contribution=0.9,
-        ...             anisotropy=Anisotropy(
-        ...                 ellipsoid_ranges=EllipsoidRanges(major=200, semi_major=150, minor=100),
-        ...                 rotation=VariogramRotation(dip_azimuth=0, dip=0, pitch=0),
+        ...             anisotropy=Ellipsoid(
+        ...                 ranges=EllipsoidRanges(major=200, semi_major=150, minor=100),
+        ...                 rotation=Rotation(dip_azimuth=0, dip=0, pitch=0),
         ...             ),
         ...         ),
         ...     ],
@@ -503,7 +422,7 @@ class Variogram(ConstructableObject[VariogramData]):
             >>> x, y, z = var_ell.surface_points(center=(100, 200, 50))
             >>> mesh = go.Mesh3d(x=x, y=y, z=z, alphahull=0, opacity=0.3)
         """
-        from .ellipsoid import Ellipsoid, EllipsoidRanges as EllipsoidRangesObj, Rotation
+        from .types import Ellipsoid, EllipsoidRanges as EllipsoidRangesObj, Rotation
 
         if not self.structures:
             raise ValueError("Variogram has no structures")
@@ -684,7 +603,7 @@ class Variogram(ConstructableObject[VariogramData]):
             pitch = rotation_dict.get("pitch", 0.0)
 
             # Build rotation matrix (same as ellipsoid)
-            rot_matrix = self._build_rotation_matrix(dip_azimuth, struct_dip, pitch)
+            rot_matrix = Rotation(dip_azimuth, struct_dip, pitch).as_rotation_matrix()
 
             # Transform direction to local (ellipsoid-aligned) coordinates
             local_dir = rot_matrix.T @ direction  # Inverse rotation
@@ -726,7 +645,7 @@ class Variogram(ConstructableObject[VariogramData]):
             pitch = rotation_dict.get("pitch", 0.0)
 
             # Calculate effective range in this direction for this structure
-            rot_matrix = self._build_rotation_matrix(dip_azimuth, struct_dip, pitch)
+            rot_matrix = Rotation(dip_azimuth, struct_dip, pitch).as_rotation_matrix()
             local_dir = rot_matrix.T @ direction
 
             if major > 0 and semi_major > 0 and minor > 0:
@@ -744,42 +663,6 @@ class Variogram(ConstructableObject[VariogramData]):
 
         return h, gamma
 
-    @staticmethod
-    def _build_rotation_matrix(
-        dip_azimuth: float, dip: float, pitch: float
-    ) -> "NDArray[np.floating[Any]]":
-        """Build rotation matrix using Leapfrog convention for column vectors.
-
-        Leapfrog uses row vector post-multiplication (vR), but we use column
-        vectors (Rv), so we apply the transpose which reverses the order
-        and uses positive angles.
-        """
-        az = np.radians(dip_azimuth)
-        d = np.radians(dip)
-        p = np.radians(pitch)
-
-        # Rz(azimuth)
-        rz_az = np.array([
-            [np.cos(az), -np.sin(az), 0],
-            [np.sin(az), np.cos(az), 0],
-            [0, 0, 1],
-        ])
-
-        # Rx(dip)
-        rx_dip = np.array([
-            [1, 0, 0],
-            [0, np.cos(d), -np.sin(d)],
-            [0, np.sin(d), np.cos(d)],
-        ])
-
-        # Rz(pitch)
-        rz_pitch = np.array([
-            [np.cos(p), -np.sin(p), 0],
-            [np.sin(p), np.cos(p), 0],
-            [0, 0, 1],
-        ])
-
-        return rz_az @ rx_dip @ rz_pitch
 
     def _repr_html_(self) -> str:
         """Return an HTML representation for Jupyter notebooks."""

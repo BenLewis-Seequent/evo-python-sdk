@@ -31,9 +31,9 @@ from evo.objects.typed import (
     LinearStructure,
     SpheroidalStructure,
     GeneralisedCauchyStructure,
-    Anisotropy,
+    Ellipsoid,
     EllipsoidRanges,
-    VariogramRotation,
+    Rotation,
 )
 from evo.objects.typed.base import BaseObject
 
@@ -66,16 +66,16 @@ class TestVariogram(TestWithConnector):
         structures=[
             SphericalStructure(
                 contribution=0.8,
-                anisotropy=Anisotropy(
-                    ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
-                    rotation=VariogramRotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
+                anisotropy=Ellipsoid(
+                    ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
+                    rotation=Rotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
                 ),
             ),
             ExponentialStructure(
                 contribution=0.5,
-                anisotropy=Anisotropy(
-                    ellipsoid_ranges=EllipsoidRanges(major=200.0, semi_major=100.0, minor=50.0),
-                    rotation=VariogramRotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
+                anisotropy=Ellipsoid(
+                    ranges=EllipsoidRanges(major=200.0, semi_major=100.0, minor=50.0),
+                    rotation=Rotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
                 ),
             ),
         ],
@@ -152,8 +152,8 @@ class TestVariogram(TestWithConnector):
             structures=[
                 SphericalStructure(
                     contribution=1.0,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
                     ),
                 )
             ],
@@ -172,9 +172,9 @@ class TestVariogram(TestWithConnector):
             structures=[
                 GaussianStructure(
                     contribution=0.9,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=150.0, semi_major=75.0, minor=30.0),
-                        rotation=VariogramRotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=150.0, semi_major=75.0, minor=30.0),
+                        rotation=Rotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
                     ),
                 )
             ],
@@ -196,23 +196,23 @@ class TestVariogram(TestWithConnector):
             structures=[
                 SphericalStructure(
                     contribution=0.5,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
-                        rotation=VariogramRotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
+                        rotation=Rotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
                     ),
                 ),
                 ExponentialStructure(
                     contribution=0.8,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=200.0, semi_major=100.0, minor=50.0),
-                        rotation=VariogramRotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=200.0, semi_major=100.0, minor=50.0),
+                        rotation=Rotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
                     ),
                 ),
                 GaussianStructure(
                     contribution=0.5,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=300.0, semi_major=150.0, minor=75.0),
-                        rotation=VariogramRotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=300.0, semi_major=150.0, minor=75.0),
+                        rotation=Rotation(dip_azimuth=0.0, dip=0.0, pitch=0.0),
                     ),
                 ),
             ],
@@ -233,8 +233,8 @@ class TestVariogram(TestWithConnector):
             structures=[
                 CubicStructure(
                     contribution=1.0,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
                     ),
                 )
             ],
@@ -248,9 +248,9 @@ class TestVariogram(TestWithConnector):
         """Test that typed structures correctly convert to dictionaries."""
         structure = SphericalStructure(
             contribution=0.8,
-            anisotropy=Anisotropy(
-                ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
-                rotation=VariogramRotation(dip_azimuth=45.0, dip=30.0, pitch=15.0),
+            anisotropy=Ellipsoid(
+                ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
+                rotation=Rotation(dip_azimuth=45.0, dip=30.0, pitch=15.0),
             ),
         )
         result = structure.to_dict()
@@ -271,26 +271,12 @@ class TestVariogram(TestWithConnector):
 
         self.assertEqual(result, {"major": 200.0, "semi_major": 150.0, "minor": 100.0})
 
-    def test_variogram_rotation_to_dict(self):
-        """Test VariogramRotation to_dict method."""
-        rotation = VariogramRotation(dip_azimuth=45.0, dip=30.0, pitch=15.0)
-        result = rotation.to_dict()
-
-        self.assertEqual(result, {"dip_azimuth": 45.0, "dip": 30.0, "pitch": 15.0})
-
-    def test_variogram_rotation_defaults(self):
-        """Test VariogramRotation default values."""
-        rotation = VariogramRotation()
-        result = rotation.to_dict()
-
-        self.assertEqual(result, {"dip_azimuth": 0.0, "dip": 0.0, "pitch": 0.0})
-
-    def test_anisotropy_default_rotation(self):
-        """Test Anisotropy with default rotation."""
-        anisotropy = Anisotropy(
-            ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
+    def test_ellipsoid_default_rotation(self):
+        """Test Ellipsoid with default rotation."""
+        ellipsoid = Ellipsoid(
+            ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
         )
-        result = anisotropy.to_dict()
+        result = ellipsoid.to_dict()
 
         self.assertEqual(result["ellipsoid_ranges"]["major"], 100.0)
         self.assertEqual(result["rotation"]["dip_azimuth"], 0.0)
@@ -306,8 +292,8 @@ class TestVariogram(TestWithConnector):
             structures=[
                 SphericalStructure(
                     contribution=0.5,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
                     ),
                 ),
                 {
@@ -330,39 +316,39 @@ class TestVariogram(TestWithConnector):
         """Test that all structure types have correct variogram_type."""
         self.assertEqual(SphericalStructure(
             contribution=1.0,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "spherical")
 
         self.assertEqual(ExponentialStructure(
             contribution=1.0,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "exponential")
 
         self.assertEqual(GaussianStructure(
             contribution=1.0,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "gaussian")
 
         self.assertEqual(CubicStructure(
             contribution=1.0,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "cubic")
 
         self.assertEqual(LinearStructure(
             contribution=1.0,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "linear")
 
         self.assertEqual(SpheroidalStructure(
             contribution=1.0,
             alpha=5,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "spheroidal")
 
         self.assertEqual(GeneralisedCauchyStructure(
             contribution=1.0,
             alpha=7,
-            anisotropy=Anisotropy(ellipsoid_ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
+            anisotropy=Ellipsoid(ranges=EllipsoidRanges(major=1, semi_major=1, minor=1)),
         ).variogram_type, "generalisedcauchy")
 
     async def test_linear_structure(self):
@@ -374,8 +360,8 @@ class TestVariogram(TestWithConnector):
             structures=[
                 LinearStructure(
                     contribution=1.0,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
                     ),
                 )
             ],
@@ -395,9 +381,9 @@ class TestVariogram(TestWithConnector):
                 SpheroidalStructure(
                     contribution=1.0,
                     alpha=5,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=75.0, minor=50.0),
-                        rotation=VariogramRotation(dip_azimuth=45.0, dip=30.0, pitch=15.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=100.0, semi_major=75.0, minor=50.0),
+                        rotation=Rotation(dip_azimuth=45.0, dip=30.0, pitch=15.0),
                     ),
                 )
             ],
@@ -417,8 +403,8 @@ class TestVariogram(TestWithConnector):
                 GeneralisedCauchyStructure(
                     contribution=1.0,
                     alpha=7,
-                    anisotropy=Anisotropy(
-                        ellipsoid_ranges=EllipsoidRanges(major=150.0, semi_major=100.0, minor=75.0),
+                    anisotropy=Ellipsoid(
+                        ranges=EllipsoidRanges(major=150.0, semi_major=100.0, minor=75.0),
                     ),
                 )
             ],
@@ -433,8 +419,8 @@ class TestVariogram(TestWithConnector):
         structure = SpheroidalStructure(
             contribution=0.8,
             alpha=5,
-            anisotropy=Anisotropy(
-                ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
+            anisotropy=Ellipsoid(
+                ranges=EllipsoidRanges(major=100.0, semi_major=50.0, minor=25.0),
             ),
         )
         result = structure.to_dict()
@@ -449,9 +435,9 @@ class TestVariogram(TestWithConnector):
         structure = GeneralisedCauchyStructure(
             contribution=0.7,
             alpha=9,
-            anisotropy=Anisotropy(
-                ellipsoid_ranges=EllipsoidRanges(major=200.0, semi_major=150.0, minor=100.0),
-                rotation=VariogramRotation(dip_azimuth=90.0, dip=45.0, pitch=0.0),
+            anisotropy=Ellipsoid(
+                ranges=EllipsoidRanges(major=200.0, semi_major=150.0, minor=100.0),
+                rotation=Rotation(dip_azimuth=90.0, dip=45.0, pitch=0.0),
             ),
         )
         result = structure.to_dict()
@@ -465,8 +451,8 @@ class TestVariogram(TestWithConnector):
         """Test that linear structure correctly converts to dict."""
         structure = LinearStructure(
             contribution=0.5,
-            anisotropy=Anisotropy(
-                ellipsoid_ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
+            anisotropy=Ellipsoid(
+                ranges=EllipsoidRanges(major=100.0, semi_major=100.0, minor=100.0),
             ),
         )
         result = structure.to_dict()

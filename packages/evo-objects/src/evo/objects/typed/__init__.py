@@ -11,9 +11,6 @@
 
 from .attributes import Attribute, Attributes
 from .base import object_from_path, object_from_reference, object_from_uuid, BaseObject
-from .ellipsoid import Ellipsoid
-from .ellipsoid import EllipsoidRanges as EllipsoidRanges  # For search/visualization
-from .ellipsoid import Rotation as EllipsoidRotation  # For search/visualization
 from .pointset import (
     Locations,
     PointSet,
@@ -33,11 +30,19 @@ from .tensor_grid import (
     Tensor3DGrid,
     Tensor3DGridData,
 )
-from .types import BoundingBox, CoordinateReferenceSystem, EpsgCode, Point3, Rotation, Size3d, Size3i
+from .types import (
+    BoundingBox,
+    CoordinateReferenceSystem,
+    Ellipsoid,
+    EllipsoidRanges,
+    EpsgCode,
+    Point3,
+    Rotation,
+    Size3d,
+    Size3i,
+)
 from .variogram import (
-    Anisotropy,
     CubicStructure,
-    EllipsoidRanges as VariogramEllipsoidRanges,  # For variogram structure data definition
     ExponentialStructure,
     GaussianStructure,
     GeneralisedCauchyStructure,
@@ -47,7 +52,6 @@ from .variogram import (
     Variogram,
     VariogramCurveData,
     VariogramData,
-    VariogramRotation,
     VariogramStructure,
 )
 
@@ -55,7 +59,6 @@ from .variogram import (
 __all__ = [
     "Attribute",
     "Attributes",
-    "Anisotropy",
     "BaseObject",
     "BaseSpatialObject",
     "BoundingBox",
@@ -63,7 +66,6 @@ __all__ = [
     "CubicStructure",
     "Ellipsoid",
     "EllipsoidRanges",
-    "EllipsoidRotation",
     "EpsgCode",
     "ExponentialStructure",
     "GaussianStructure",
@@ -87,8 +89,6 @@ __all__ = [
     "Variogram",
     "VariogramCurveData",
     "VariogramData",
-    "VariogramEllipsoidRanges",
-    "VariogramRotation",
     "VariogramStructure",
     "object_from_path",
     "object_from_reference",

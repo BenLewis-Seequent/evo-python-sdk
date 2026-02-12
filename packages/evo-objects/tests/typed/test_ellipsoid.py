@@ -16,60 +16,16 @@ import unittest
 import numpy as np
 from parameterized import parameterized
 
-from evo.objects.typed.ellipsoid import (
+from evo.objects.typed.types import (
     Ellipsoid,
     EllipsoidRanges,
     Rotation,
-    _rotation_matrix,
 )
 from evo.objects.typed.variogram import (
     VariogramCurveData,
     _evaluate_structure,
 )
 
-
-class TestRotationMatrix(unittest.TestCase):
-    """Tests for rotation matrix calculation.
-
-    Leapfrog/Geoscience convention uses clockwise rotations (looking down positive axis):
-    - Unrotated ellipsoid has major axis along X, semi_major along Y, minor along Z
-    - Azimuth: clockwise rotation around Z axis (X rotates toward -Y)
-    - Dip: clockwise rotation around X axis (Z rotates toward +Y)
-    - Pitch: clockwise rotation around Z axis (in the dipping plane)
-
-    The matrix is built for column vector pre-multiplication (R @ v).
-    """
-
-    def test_identity_rotation(self):
-        """No rotation should give identity matrix."""
-        rot = _rotation_matrix(0, 0, 0)
-        np.testing.assert_array_almost_equal(rot, np.eye(3))
-
-    def test_azimuth_90_rotates_x_to_negative_y(self):
-        """90 degree azimuth rotates X axis toward -Y axis (clockwise around Z)."""
-        rot = _rotation_matrix(90, 0, 0)
-        # X-axis vector should rotate toward -Y (clockwise when looking down Z)
-        x_vec = np.array([1, 0, 0])
-        result = rot @ x_vec
-        np.testing.assert_array_almost_equal(result, [0, -1, 0], decimal=5)
-
-    def test_dip_90_rotates_z_to_positive_y(self):
-        """90 degree dip rotates Z axis toward +Y (clockwise around X)."""
-        rot = _rotation_matrix(0, 90, 0)
-        # Z-axis should rotate toward +Y (clockwise when looking down X)
-        z_vec = np.array([0, 0, 1])
-        result = rot @ z_vec
-        np.testing.assert_array_almost_equal(result, [0, 1, 0], decimal=5)
-
-    def test_rotation_is_orthogonal(self):
-        """Rotation matrix should be orthogonal (R^T R = I)."""
-        rot = _rotation_matrix(45, 30, 60)
-        np.testing.assert_array_almost_equal(rot.T @ rot, np.eye(3), decimal=10)
-
-    def test_rotation_determinant_is_one(self):
-        """Rotation matrix should have determinant of +1."""
-        rot = _rotation_matrix(45, 30, 60)
-        self.assertAlmostEqual(np.linalg.det(rot), 1.0, places=10)
 
 
 class TestEllipsoidWireframe(unittest.TestCase):
@@ -193,8 +149,6 @@ class TestVariogramMethods(unittest.TestCase):
         variogram.structures = structures
         variogram.nugget = 0.1
         variogram.sill = 1.0
-        # Ensure _build_rotation_matrix is callable and uses the real implementation
-        variogram._build_rotation_matrix = Variogram._build_rotation_matrix
         return variogram
 
     def test_get_ellipsoid_default_selects_largest_volume(self):
@@ -754,7 +708,7 @@ class TestEllipsoidWireframeAxisAlignment(unittest.TestCase):
         """
 
         # Get the rotation matrix
-        R = _rotation_matrix(dip_azimuth, dip, pitch)
+        R = Rotation(dip_azimuth, dip, pitch).as_rotation_matrix()
 
         # Compute axis directions and endpoints
         center_arr = np.array(center)
