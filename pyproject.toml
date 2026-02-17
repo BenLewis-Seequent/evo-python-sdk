@@ -10,7 +10,7 @@ dependencies = [
     "evo-objects[aiohttp,notebooks,utils]>=0.4.0",
     "evo-files[aiohttp,notebooks]>=0.2.3",
     "evo-colormaps[aiohttp,notebooks]>=0.0.2",
-    "evo-compute[aiohttp,notebooks]>=0.0.1rc2",
+    "evo-compute[aiohttp,notebooks]>=0.0.2",
     "jupyter",
 ]
 dynamic = ["readme"]
