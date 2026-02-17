@@ -874,11 +874,12 @@ test = [
 
 [[package]]
 name = "evo-compute"
-version = "0.0.1rc3"
+version = "0.0.2"
 source = { editable = "packages/evo-compute" }
 dependencies = [
     { name = "evo-sdk-common" },
     { name = "pydantic" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -910,6 +911,7 @@ requires-dist = [
     { name = "evo-sdk-common", extras = ["aiohttp"], marker = "extra == 'aiohttp'", editable = "packages/evo-sdk-common" },
     { name = "evo-sdk-common", extras = ["notebooks"], marker = "extra == 'notebooks'", editable = "packages/evo-sdk-common" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "typing-extensions", specifier = ">=4.0" },
 ]
 provides-extras = ["aiohttp", "notebooks"]
 
