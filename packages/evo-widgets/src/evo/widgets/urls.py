@@ -22,6 +22,8 @@ from uuid import UUID
 
 from evo.objects import ObjectReference
 
+from evo.objects import ObjectReference
+
 if TYPE_CHECKING:
     from evo.common import Environment
     from evo.common.interfaces import IContext
