@@ -54,6 +54,7 @@ from .common import (
 # Result types from kriging (these are general enough for other tasks too)
 from .kriging import (
     KrigingResult,
+    RegionFilter,
     TaskResult,
     TaskResults,
 )

@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 
 from evo.compute.tasks import (
     CreateAttribute,
+    RegionFilter,
     SearchNeighborhood,
     Source,
     Target,
@@ -294,3 +295,173 @@ class TestTargetSerialization(TestCase):
         self.assertEqual(result["object"], "https://example.com/grid")
         self.assertEqual(result["attribute"]["operation"], "create")
         self.assertEqual(result["attribute"]["name"], "new_attr")
+
+
+class TestRegionFilter(TestCase):
+    """Tests for RegionFilter class."""
+
+    def test_region_filter_with_names(self):
+        """Test RegionFilter with category names."""
+        region_filter = RegionFilter(
+            attribute="domain_attribute",
+            names=["LMS1", "LMS2"],
+        )
+
+        result = region_filter.to_dict()
+
+        self.assertEqual(result["attribute"], "domain_attribute")
+        self.assertEqual(result["names"], ["LMS1", "LMS2"])
+        self.assertNotIn("values", result)
+
+    def test_region_filter_with_values(self):
+        """Test RegionFilter with integer values."""
+        region_filter = RegionFilter(
+            attribute="domain_code_attribute",
+            values=[1, 2, 3],
+        )
+
+        result = region_filter.to_dict()
+
+        self.assertEqual(result["attribute"], "domain_code_attribute")
+        self.assertEqual(result["values"], [1, 2, 3])
+        self.assertNotIn("names", result)
+
+    def test_region_filter_with_block_model_attribute(self):
+        """Test RegionFilter with BlockModelAttribute-like object."""
+        mock_attr = MagicMock()
+        mock_attr.expression = "attributes[?name=='domain']"
+
+        region_filter = RegionFilter(
+            attribute=mock_attr,
+            names=["Zone1"],
+        )
+
+        result = region_filter.to_dict()
+
+        self.assertEqual(result["attribute"], "attributes[?name=='domain']")
+        self.assertEqual(result["names"], ["Zone1"])
+
+    def test_region_filter_with_pointset_attribute(self):
+        """Test RegionFilter with PointSet attribute-like object."""
+        mock_attr = MagicMock()
+        mock_attr.to_source_dict.return_value = {
+            "object": "https://example.com/pointset",
+            "attribute": "locations.attributes[?name=='domain']",
+        }
+        # Remove expression attribute so it falls through to to_source_dict
+        del mock_attr.expression
+
+        region_filter = RegionFilter(
+            attribute=mock_attr,
+            names=["Domain1"],
+        )
+
+        result = region_filter.to_dict()
+
+        self.assertEqual(result["attribute"], "locations.attributes[?name=='domain']")
+        self.assertEqual(result["names"], ["Domain1"])
+
+    def test_region_filter_cannot_have_both_names_and_values(self):
+        """Test RegionFilter raises error when both names and values are provided."""
+        with self.assertRaises(ValueError) as context:
+            RegionFilter(
+                attribute="domain_attribute",
+                names=["LMS1"],
+                values=[1],
+            )
+
+        self.assertIn("Only one of 'names' or 'values' may be provided", str(context.exception))
+
+    def test_region_filter_must_have_names_or_values(self):
+        """Test RegionFilter raises error when neither names nor values are provided."""
+        with self.assertRaises(ValueError) as context:
+            RegionFilter(
+                attribute="domain_attribute",
+            )
+
+        self.assertIn("One of 'names' or 'values' must be provided", str(context.exception))
+
+
+class TestKrigingParametersWithRegionFilter(TestCase):
+    """Tests for KrigingParameters with region filter support."""
+
+    def test_kriging_params_with_region_filter_names(self):
+        """Test KrigingParameters with region filter using category names."""
+        source = Source(object="https://example.com/pointset", attribute="grade")
+        target = Target.new_attribute("https://example.com/grid", "kriged_grade")
+        variogram = "https://example.com/variogram"
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
+            max_samples=20,
+        )
+        region_filter = RegionFilter(
+            attribute="domain_attribute",
+            names=["LMS1", "LMS2"],
+        )
+
+        params = KrigingParameters(
+            source=source,
+            target=target,
+            variogram=variogram,
+            search=search,
+            region_filter=region_filter,
+        )
+
+        params_dict = params.to_dict()
+
+        # Verify region filter is in target
+        self.assertIn("region_filter", params_dict["target"])
+        self.assertEqual(params_dict["target"]["region_filter"]["attribute"], "domain_attribute")
+        self.assertEqual(params_dict["target"]["region_filter"]["names"], ["LMS1", "LMS2"])
+
+    def test_kriging_params_with_region_filter_values(self):
+        """Test KrigingParameters with region filter using integer values."""
+        source = Source(object="https://example.com/pointset", attribute="grade")
+        target = Target.new_attribute("https://example.com/grid", "kriged_grade")
+        variogram = "https://example.com/variogram"
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
+            max_samples=20,
+        )
+        region_filter = RegionFilter(
+            attribute="domain_code",
+            values=[1, 2, 3],
+        )
+
+        params = KrigingParameters(
+            source=source,
+            target=target,
+            variogram=variogram,
+            search=search,
+            region_filter=region_filter,
+        )
+
+        params_dict = params.to_dict()
+
+        # Verify region filter is in target
+        self.assertIn("region_filter", params_dict["target"])
+        self.assertEqual(params_dict["target"]["region_filter"]["attribute"], "domain_code")
+        self.assertEqual(params_dict["target"]["region_filter"]["values"], [1, 2, 3])
+
+    def test_kriging_params_without_region_filter(self):
+        """Test KrigingParameters without region filter (default behavior)."""
+        source = Source(object="https://example.com/pointset", attribute="grade")
+        target = Target.new_attribute("https://example.com/grid", "kriged_grade")
+        variogram = "https://example.com/variogram"
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
+            max_samples=20,
+        )
+
+        params = KrigingParameters(
+            source=source,
+            target=target,
+            variogram=variogram,
+            search=search,
+        )
+
+        params_dict = params.to_dict()
+
+        # Verify region filter is not present
+        self.assertNotIn("region_filter", params_dict["target"])
+
