@@ -464,4 +464,3 @@ class TestKrigingParametersWithRegionFilter(TestCase):
 
         # Verify region filter is not present
         self.assertNotIn("region_filter", params_dict["target"])
-

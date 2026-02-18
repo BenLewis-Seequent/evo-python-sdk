@@ -204,6 +204,7 @@ __all__ = [
     "Ellipsoid",
     "EllipsoidRanges",
     "KrigingResult",
+    "RegionFilter",
     "Rotation",
     "SearchNeighborhood",
     "Source",
