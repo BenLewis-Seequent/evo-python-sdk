@@ -62,6 +62,7 @@ __all__ = [
     "KrigingMethod",
     "KrigingParameters",
     "OrdinaryKriging",
+    "RegionFilter",
     "SimpleKriging",
 ]
 
@@ -144,6 +145,83 @@ class KrigingMethod:
 
 
 # =============================================================================
+# Region Filter
+# =============================================================================
+
+
+@dataclass
+class RegionFilter:
+    """Region filter for restricting kriging to specific categories on the target.
+
+    Use either `names` OR `values`, not both:
+    - `names`: Category names (strings) - used for CategoryAttribute with string lookup
+    - `values`: Integer values - used for integer-indexed categories or BlockModel integer columns
+
+    Example:
+        >>> # Filter by category names (string lookup)
+        >>> filter_by_name = RegionFilter(
+        ...     attribute=block_model.attributes["domain"],
+        ...     names=["LMS1", "LMS2"],
+        ... )
+        >>>
+        >>> # Filter by integer values (direct index matching)
+        >>> filter_by_value = RegionFilter(
+        ...     attribute=block_model.attributes["domain"],
+        ...     values=[1, 2, 3],
+        ... )
+    """
+
+    attribute: Any
+    """The category attribute to filter on (from target object)."""
+
+    names: list[str] | None = None
+    """Category names to include (mutually exclusive with values)."""
+
+    values: list[int] | None = None
+    """Integer category keys to include (mutually exclusive with names)."""
+
+    def __init__(
+        self,
+        attribute: Any,
+        names: list[str] | None = None,
+        values: list[int] | None = None,
+    ):
+        if names is not None and values is not None:
+            raise ValueError("Only one of 'names' or 'values' may be provided, not both.")
+        if names is None and values is None:
+            raise ValueError("One of 'names' or 'values' must be provided.")
+
+        self.attribute = attribute
+        self.names = names
+        self.values = values
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary for the compute task API."""
+        # Get attribute reference from the attribute object
+        # The kriging task expects a JMESPath expression that can select the attribute
+        if hasattr(self.attribute, "expression"):
+            # BlockModelAttribute or similar - use the JMESPath expression
+            attribute_expr = self.attribute.expression
+        elif hasattr(self.attribute, "to_source_dict"):
+            # PointSet attribute style
+            attr_dict = self.attribute.to_source_dict()
+            attribute_expr = attr_dict["attribute"]
+        elif isinstance(self.attribute, str):
+            attribute_expr = self.attribute
+        else:
+            raise TypeError(f"Cannot serialize region filter attribute of type {type(self.attribute)}")
+
+        result: dict[str, Any] = {"attribute": attribute_expr}
+
+        if self.names is not None:
+            result["names"] = self.names
+        if self.values is not None:
+            result["values"] = self.values
+
+        return result
+
+
+# =============================================================================
 # Kriging Parameters
 # =============================================================================
 
@@ -156,7 +234,7 @@ class KrigingParameters:
 
     Example:
         >>> from evo.compute.tasks import run, SearchNeighborhood, Ellipsoid, EllipsoidRanges
-        >>> from evo.compute.tasks.kriging import KrigingParameters
+        >>> from evo.compute.tasks.kriging import KrigingParameters, RegionFilter
         >>>
         >>> params = KrigingParameters(
         ...     source=pointset.attributes["grade"],  # Source attribute
@@ -167,6 +245,18 @@ class KrigingParameters:
         ...         max_samples=20,
         ...     ),
         ...     # method defaults to ordinary kriging
+        ... )
+        >>>
+        >>> # With region filter to restrict kriging to specific categories on target:
+        >>> params_filtered = KrigingParameters(
+        ...     source=pointset.attributes["grade"],
+        ...     target=block_model.attributes["kriged_grade"],
+        ...     variogram=variogram,
+        ...     search=SearchNeighborhood(...),
+        ...     target_region_filter=RegionFilter(
+        ...         attribute=block_model.attributes["domain"],
+        ...         names=["LMS1", "LMS2"],
+        ...     ),
         ... )
     """
 
@@ -185,6 +275,9 @@ class KrigingParameters:
     method: SimpleKriging | OrdinaryKriging | None = None
     """The kriging method to use. Defaults to ordinary kriging if not specified."""
 
+    target_region_filter: RegionFilter | None = None
+    """Optional region filter to restrict kriging to specific categories on the target object."""
+
     def __init__(
         self,
         source: Source | Any,  # Also accepts Attribute from evo.objects.typed
@@ -192,6 +285,7 @@ class KrigingParameters:
         variogram: GeoscienceObjectReference,
         search: SearchNeighborhood,
         method: SimpleKriging | OrdinaryKriging | None = None,
+        target_region_filter: RegionFilter | None = None,
     ):
         # Handle Attribute/PendingAttribute types from evo.objects.typed.dataset
         if hasattr(source, "_obj") and hasattr(source, "expression"):
@@ -208,12 +302,19 @@ class KrigingParameters:
         self.variogram = variogram
         self.search = search
         self.method = method or OrdinaryKriging()
+        self.target_region_filter = target_region_filter
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
+        target_dict = self.target.to_dict()
+
+        # Add region filter to target if provided
+        if self.target_region_filter is not None:
+            target_dict["region_filter"] = self.target_region_filter.to_dict()
+
         return {
             "source": self.source.to_dict(),
-            "target": self.target.to_dict(),
+            "target": target_dict,
             "variogram": _serialize_object_reference(self.variogram),
             "neighborhood": self.search.to_dict(),
             "kriging_method": self.method.to_dict(),
