@@ -241,13 +241,13 @@ class KrigingParameters:
         ...     # method defaults to ordinary kriging
         ... )
         >>>
-        >>> # With region filter to restrict kriging to specific categories:
+        >>> # With region filter to restrict kriging to specific categories on target:
         >>> params_filtered = KrigingParameters(
         ...     source=pointset.attributes["grade"],
         ...     target=block_model.attributes["kriged_grade"],
         ...     variogram=variogram,
         ...     search=SearchNeighborhood(...),
-        ...     region_filter=RegionFilter(
+        ...     target_region_filter=RegionFilter(
         ...         attribute=block_model.attributes["domain"],
         ...         names=["LMS1", "LMS2"],
         ...     ),
@@ -269,8 +269,8 @@ class KrigingParameters:
     method: SimpleKriging | OrdinaryKriging | None = None
     """The kriging method to use. Defaults to ordinary kriging if not specified."""
 
-    region_filter: RegionFilter | None = None
-    """Optional region filter to restrict kriging to specific categories on the target."""
+    target_region_filter: RegionFilter | None = None
+    """Optional region filter to restrict kriging to specific categories on the target object."""
 
     def __init__(
         self,
@@ -279,7 +279,7 @@ class KrigingParameters:
         variogram: GeoscienceObjectReference,
         search: SearchNeighborhood,
         method: SimpleKriging | OrdinaryKriging | None = None,
-        region_filter: RegionFilter | None = None,
+        target_region_filter: RegionFilter | None = None,
     ):
         # Handle Attribute types from evo.objects.typed.attributes
         if hasattr(source, "to_source_dict"):
@@ -297,15 +297,15 @@ class KrigingParameters:
         self.variogram = variogram
         self.search = search
         self.method = method or OrdinaryKriging()
-        self.region_filter = region_filter
+        self.target_region_filter = target_region_filter
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         target_dict = self.target.to_dict()
 
         # Add region filter to target if provided
-        if self.region_filter is not None:
-            target_dict["region_filter"] = self.region_filter.to_dict()
+        if self.target_region_filter is not None:
+            target_dict["region_filter"] = self.target_region_filter.to_dict()
 
         return {
             "source": self.source.to_dict(),

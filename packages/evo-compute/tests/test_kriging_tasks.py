@@ -383,10 +383,10 @@ class TestRegionFilter(TestCase):
 
 
 class TestKrigingParametersWithRegionFilter(TestCase):
-    """Tests for KrigingParameters with region filter support."""
+    """Tests for KrigingParameters with target region filter support."""
 
-    def test_kriging_params_with_region_filter_names(self):
-        """Test KrigingParameters with region filter using category names."""
+    def test_kriging_params_with_target_region_filter_names(self):
+        """Test KrigingParameters with target region filter using category names."""
         source = Source(object="https://example.com/pointset", attribute="grade")
         target = Target.new_attribute("https://example.com/grid", "kriged_grade")
         variogram = "https://example.com/variogram"
@@ -404,7 +404,7 @@ class TestKrigingParametersWithRegionFilter(TestCase):
             target=target,
             variogram=variogram,
             search=search,
-            region_filter=region_filter,
+            target_region_filter=region_filter,
         )
 
         params_dict = params.to_dict()
@@ -414,8 +414,8 @@ class TestKrigingParametersWithRegionFilter(TestCase):
         self.assertEqual(params_dict["target"]["region_filter"]["attribute"], "domain_attribute")
         self.assertEqual(params_dict["target"]["region_filter"]["names"], ["LMS1", "LMS2"])
 
-    def test_kriging_params_with_region_filter_values(self):
-        """Test KrigingParameters with region filter using integer values."""
+    def test_kriging_params_with_target_region_filter_values(self):
+        """Test KrigingParameters with target region filter using integer values."""
         source = Source(object="https://example.com/pointset", attribute="grade")
         target = Target.new_attribute("https://example.com/grid", "kriged_grade")
         variogram = "https://example.com/variogram"
@@ -433,7 +433,7 @@ class TestKrigingParametersWithRegionFilter(TestCase):
             target=target,
             variogram=variogram,
             search=search,
-            region_filter=region_filter,
+            target_region_filter=region_filter,
         )
 
         params_dict = params.to_dict()
@@ -443,8 +443,8 @@ class TestKrigingParametersWithRegionFilter(TestCase):
         self.assertEqual(params_dict["target"]["region_filter"]["attribute"], "domain_code")
         self.assertEqual(params_dict["target"]["region_filter"]["values"], [1, 2, 3])
 
-    def test_kriging_params_without_region_filter(self):
-        """Test KrigingParameters without region filter (default behavior)."""
+    def test_kriging_params_without_target_region_filter(self):
+        """Test KrigingParameters without target region filter (default behavior)."""
         source = Source(object="https://example.com/pointset", attribute="grade")
         target = Target.new_attribute("https://example.com/grid", "kriged_grade")
         variogram = "https://example.com/variogram"
