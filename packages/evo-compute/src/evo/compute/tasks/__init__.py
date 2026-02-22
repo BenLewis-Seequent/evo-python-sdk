@@ -53,6 +53,7 @@ from .common import (
 
 # Result types from kriging (these are general enough for other tasks too)
 from .kriging import (
+    BlockDiscretisation,
     KrigingResult,
     RegionFilter,
     TaskResult,
@@ -200,6 +201,7 @@ async def run(
 
 
 __all__ = [
+    "BlockDiscretisation",
     "CreateAttribute",
     "Ellipsoid",
     "EllipsoidRanges",
