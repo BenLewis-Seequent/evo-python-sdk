@@ -54,7 +54,9 @@ from . import kriging as _kriging_module  # noqa: F401
 
 # Result types from kriging (these are general enough for other tasks too)
 from .kriging import (
+    BlockDiscretisation,
     KrigingResult,
+    RegionFilter,
     TaskResult,
     TaskResults,
 )
@@ -198,9 +200,11 @@ async def run(
 
 __all__ = [
     # Shared components
+    "BlockDiscretisation",
     "CreateAttribute",
     "Ellipsoid",
     "EllipsoidRanges",
+    "RegionFilter",
     "Rotation",
     "SearchNeighborhood",
     "Source",

@@ -15,14 +15,16 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 
 from evo.compute.tasks import (
+    BlockDiscretisation,
     KrigingParameters,
+    RegionFilter,
     SearchNeighbourhood,
     Source,
     Target,
     CreateAttribute,
     UpdateAttribute,
 )
-from evo.compute.tasks.common import Ellipsoid, EllipsoidRanges
+from evo.compute.tasks.common import Ellipsoid, EllipsoidRanges, SearchNeighborhood
 
 
 class TestKrigingParametersWithAttributes(TestCase):
@@ -290,3 +292,159 @@ class TestTargetSerialization(TestCase):
         self.assertEqual(result["attribute"]["operation"], "create")
         self.assertEqual(result["attribute"]["name"], "new_attr")
 
+
+class TestBlockDiscretisation(TestCase):
+    """Tests for BlockDiscretisation class."""
+
+    def test_default_values(self):
+        """Test BlockDiscretisation defaults to 1x1x1."""
+        bd = BlockDiscretisation()
+
+        self.assertEqual(bd.nx, 1)
+        self.assertEqual(bd.ny, 1)
+        self.assertEqual(bd.nz, 1)
+
+    def test_custom_values(self):
+        """Test BlockDiscretisation with custom values."""
+        bd = BlockDiscretisation(nx=3, ny=4, nz=2)
+
+        self.assertEqual(bd.nx, 3)
+        self.assertEqual(bd.ny, 4)
+        self.assertEqual(bd.nz, 2)
+
+    def test_maximum_values(self):
+        """Test BlockDiscretisation with maximum values (9)."""
+        bd = BlockDiscretisation(nx=9, ny=9, nz=9)
+
+        self.assertEqual(bd.nx, 9)
+        self.assertEqual(bd.ny, 9)
+        self.assertEqual(bd.nz, 9)
+
+    def test_to_dict(self):
+        """Test BlockDiscretisation serializes correctly."""
+        bd = BlockDiscretisation(nx=3, ny=3, nz=2)
+
+        result = bd.to_dict()
+
+        self.assertEqual(result, {"nx": 3, "ny": 3, "nz": 2})
+
+    def test_to_dict_defaults(self):
+        """Test BlockDiscretisation serializes default values."""
+        bd = BlockDiscretisation()
+
+        result = bd.to_dict()
+
+        self.assertEqual(result, {"nx": 1, "ny": 1, "nz": 1})
+
+    def test_validation_nx_too_low(self):
+        """Test BlockDiscretisation rejects nx < 1."""
+        with self.assertRaises(ValueError) as ctx:
+            BlockDiscretisation(nx=0)
+
+        self.assertIn("nx", str(ctx.exception))
+        self.assertIn("between 1 and 9", str(ctx.exception))
+
+    def test_validation_ny_too_high(self):
+        """Test BlockDiscretisation rejects ny > 9."""
+        with self.assertRaises(ValueError) as ctx:
+            BlockDiscretisation(ny=10)
+
+        self.assertIn("ny", str(ctx.exception))
+        self.assertIn("between 1 and 9", str(ctx.exception))
+
+    def test_validation_nz_negative(self):
+        """Test BlockDiscretisation rejects negative nz."""
+        with self.assertRaises(ValueError) as ctx:
+            BlockDiscretisation(nz=-1)
+
+        self.assertIn("nz", str(ctx.exception))
+        self.assertIn("between 1 and 9", str(ctx.exception))
+
+    def test_validation_non_integer_type(self):
+        """Test BlockDiscretisation rejects non-integer types."""
+        with self.assertRaises(TypeError) as ctx:
+            BlockDiscretisation(nx=2.5)
+
+        self.assertIn("nx", str(ctx.exception))
+        self.assertIn("integer", str(ctx.exception))
+
+
+class TestKrigingParametersWithBlockDiscretisation(TestCase):
+    """Tests for KrigingParameters with block_discretisation support."""
+
+    def test_kriging_params_with_block_discretisation(self):
+        """Test KrigingParameters includes block_discretisation in to_dict."""
+        source = Source(object="https://example.com/pointset", attribute="grade")
+        target = Target.new_attribute("https://example.com/grid", "kriged_grade")
+        variogram = "https://example.com/variogram"
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
+            max_samples=20,
+        )
+        bd = BlockDiscretisation(nx=3, ny=3, nz=2)
+
+        params = KrigingParameters(
+            source=source,
+            target=target,
+            variogram=variogram,
+            search=search,
+            block_discretisation=bd,
+        )
+
+        params_dict = params.to_dict()
+
+        self.assertIn("block_discretisation", params_dict)
+        self.assertEqual(params_dict["block_discretisation"], {"nx": 3, "ny": 3, "nz": 2})
+
+    def test_kriging_params_without_block_discretisation(self):
+        """Test KrigingParameters omits block_discretisation when None (default)."""
+        source = Source(object="https://example.com/pointset", attribute="grade")
+        target = Target.new_attribute("https://example.com/grid", "kriged_grade")
+        variogram = "https://example.com/variogram"
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
+            max_samples=20,
+        )
+
+        params = KrigingParameters(
+            source=source,
+            target=target,
+            variogram=variogram,
+            search=search,
+        )
+
+        params_dict = params.to_dict()
+
+        self.assertNotIn("block_discretisation", params_dict)
+
+    def test_kriging_params_block_discretisation_with_region_filter(self):
+        """Test KrigingParameters with both block_discretisation and region filter."""
+        source = Source(object="https://example.com/pointset", attribute="grade")
+        target = Target.new_attribute("https://example.com/grid", "kriged_grade")
+        variogram = "https://example.com/variogram"
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
+            max_samples=20,
+        )
+        bd = BlockDiscretisation(nx=2, ny=2, nz=2)
+        region_filter = RegionFilter(
+            attribute="domain_attribute",
+            names=["LMS1"],
+        )
+
+        params = KrigingParameters(
+            source=source,
+            target=target,
+            variogram=variogram,
+            search=search,
+            block_discretisation=bd,
+            target_region_filter=region_filter,
+        )
+
+        params_dict = params.to_dict()
+
+        # Both should be present
+        self.assertIn("block_discretisation", params_dict)
+        self.assertEqual(params_dict["block_discretisation"], {"nx": 2, "ny": 2, "nz": 2})
+        self.assertIn("region_filter", params_dict["target"])
+        self.assertEqual(params_dict["target"]["region_filter"]["names"], ["LMS1"])

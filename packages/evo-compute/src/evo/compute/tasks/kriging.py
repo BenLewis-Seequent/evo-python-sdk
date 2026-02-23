@@ -59,6 +59,7 @@ from .common.source_target import GeoscienceObjectReference, _serialize_object_r
 
 __all__ = [
     # Kriging-specific (users import from evo.compute.tasks.kriging)
+    "BlockDiscretisation",
     "KrigingMethod",
     "KrigingParameters",
     "OrdinaryKriging",
@@ -142,6 +143,56 @@ class KrigingMethod:
             SimpleKriging instance configured with the given mean.
         """
         return SimpleKriging(mean)
+
+
+# =============================================================================
+# Block Discretisation
+# =============================================================================
+
+
+@dataclass
+class BlockDiscretisation:
+    """Sub-block discretisation for block kriging.
+
+    When provided, each target block is subdivided into ``nx * ny * nz``
+    sub-cells and the kriged value is averaged across these sub-cells.
+    When omitted (``None``), point kriging is performed.
+
+    Only applicable when the target is a 3D grid or block model.
+
+    Each dimension must be an integer between 1 and 9 (inclusive).
+    The default value of 1 in every direction is equivalent to point kriging.
+
+    Example:
+        >>> discretisation = BlockDiscretisation(nx=3, ny=3, nz=2)
+    """
+
+    nx: int
+    """Number of subdivisions in the x direction (1–9)."""
+
+    ny: int
+    """Number of subdivisions in the y direction (1–9)."""
+
+    nz: int
+    """Number of subdivisions in the z direction (1–9)."""
+
+    def __init__(self, nx: int = 1, ny: int = 1, nz: int = 1):
+        for name, value in [("nx", nx), ("ny", ny), ("nz", nz)]:
+            if not isinstance(value, int):
+                raise TypeError(f"{name} must be an integer, got {type(value).__name__}")
+            if value < 1 or value > 9:
+                raise ValueError(f"{name} must be between 1 and 9, got {value}")
+        self.nx = nx
+        self.ny = ny
+        self.nz = nz
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "nx": self.nx,
+            "ny": self.ny,
+            "nz": self.nz,
+        }
 
 
 # =============================================================================
@@ -278,6 +329,15 @@ class KrigingParameters:
     target_region_filter: RegionFilter | None = None
     """Optional region filter to restrict kriging to specific categories on the target object."""
 
+    block_discretisation: BlockDiscretisation | None = None
+    """Optional sub-block discretisation for block kriging.
+
+    When provided, each target block is subdivided into nx × ny × nz sub-cells
+    and the kriged value is averaged across these sub-cells. When omitted,
+    point kriging is performed. Only applicable when the target is a 3D grid
+    or block model.
+    """
+
     def __init__(
         self,
         source: Source | Any,  # Also accepts Attribute from evo.objects.typed
@@ -286,6 +346,7 @@ class KrigingParameters:
         search: SearchNeighborhood,
         method: SimpleKriging | OrdinaryKriging | None = None,
         target_region_filter: RegionFilter | None = None,
+        block_discretisation: BlockDiscretisation | None = None,
     ):
         # Handle Attribute/PendingAttribute types from evo.objects.typed.dataset
         if hasattr(source, "_obj") and hasattr(source, "expression"):
@@ -303,6 +364,7 @@ class KrigingParameters:
         self.search = search
         self.method = method or OrdinaryKriging()
         self.target_region_filter = target_region_filter
+        self.block_discretisation = block_discretisation
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -312,13 +374,19 @@ class KrigingParameters:
         if self.target_region_filter is not None:
             target_dict["region_filter"] = self.target_region_filter.to_dict()
 
-        return {
+        result = {
             "source": self.source.to_dict(),
             "target": target_dict,
             "variogram": _serialize_object_reference(self.variogram),
             "neighborhood": self.search.to_dict(),
             "kriging_method": self.method.to_dict(),
         }
+
+        # Add block discretisation if provided (omit for point kriging)
+        if self.block_discretisation is not None:
+            result["block_discretisation"] = self.block_discretisation.to_dict()
+
+        return result
 
 
 def _target_from_attribute(attr: Any) -> Target:
