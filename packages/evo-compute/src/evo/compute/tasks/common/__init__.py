@@ -15,19 +15,36 @@ from evo.objects.typed.types import Ellipsoid, EllipsoidRanges, Rotation
 
 from .runner import TaskRegistry, get_task_runner, register_task_runner, run_tasks
 from .search import SearchNeighborhood
-from .source_target import CreateAttribute, Source, Target, UpdateAttribute
+from .source_target import (
+    CreateAttribute,
+    GeoscienceObjectReference,
+    Source,
+    Target,
+    UpdateAttribute,
+    get_attribute_expression,
+    is_typed_attribute,
+    serialize_object_reference,
+    source_from_attribute,
+    target_from_attribute,
+)
 
 __all__ = [
     "CreateAttribute",
     "Ellipsoid",
     "EllipsoidRanges",
+    "GeoscienceObjectReference",
     "Rotation",
     "SearchNeighborhood",
     "Source",
     "Target",
     "TaskRegistry",
     "UpdateAttribute",
+    "get_attribute_expression",
     "get_task_runner",
+    "is_typed_attribute",
     "register_task_runner",
     "run_tasks",
+    "serialize_object_reference",
+    "source_from_attribute",
+    "target_from_attribute",
 ]

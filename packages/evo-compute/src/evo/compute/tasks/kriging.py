@@ -39,17 +39,23 @@ from typing import Any, TypeVar
 from evo.common import IContext
 from evo.common.interfaces import IFeedback
 from evo.common.utils import NoFeedback, Retry
+from evo.objects.typed.attributes import Attribute
 
 from ..client import JobClient
 
 # Import shared components
 from .common import (
+    GeoscienceObjectReference,
     SearchNeighborhood,
     Source,
     Target,
+    get_attribute_expression,
+    is_typed_attribute,
+    serialize_object_reference,
+    source_from_attribute,
+    target_from_attribute,
 )
 from .common.runner import register_task_runner
-from .common.source_target import GeoscienceObjectReference, _serialize_object_reference
 
 __all__ = [
     # Kriging-specific (users import from evo.compute.tasks.kriging)
@@ -242,15 +248,8 @@ class RegionFilter:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for the compute task API."""
-        # Get attribute reference from the attribute object
-        # The kriging task expects a JMESPath expression that can select the attribute
-        if hasattr(self.attribute, "expression"):
-            # BlockModelAttribute or similar - use the JMESPath expression
-            attribute_expr = self.attribute.expression
-        elif hasattr(self.attribute, "to_source_dict"):
-            # PointSet attribute style
-            attr_dict = self.attribute.to_source_dict()
-            attribute_expr = attr_dict["attribute"]
+        if is_typed_attribute(self.attribute):
+            attribute_expr = get_attribute_expression(self.attribute)
         elif isinstance(self.attribute, str):
             attribute_expr = self.attribute
         else:
@@ -343,15 +342,12 @@ class KrigingParameters:
         block_discretisation: BlockDiscretisation | None = None,
     ):
         # Handle Attribute types from evo.objects.typed.attributes
-        if hasattr(source, "to_source_dict"):
-            # source is an Attribute with to_source_dict() method
-            source_dict = source.to_source_dict()
-            source = Source(object=source_dict["object"], attribute=source_dict["attribute"])
+        if isinstance(source, Attribute):
+            source = source_from_attribute(source)
 
         # Handle target attribute types (Attribute, PendingAttribute, BlockModelAttribute, BlockModelPendingAttribute)
-        if hasattr(target, "to_target_dict"):
-            # target is an attribute type with to_target_dict() method
-            target = _target_from_attribute(target)
+        if is_typed_attribute(target):
+            target = target_from_attribute(target)
 
         self.source = source
         self.target = target
@@ -372,7 +368,7 @@ class KrigingParameters:
         result = {
             "source": self.source.to_dict(),
             "target": target_dict,
-            "variogram": _serialize_object_reference(self.variogram),
+            "variogram": serialize_object_reference(self.variogram),
             "neighborhood": self.search.to_dict(),
             "kriging_method": self.method.to_dict(),
         }
@@ -384,35 +380,6 @@ class KrigingParameters:
         return result
 
 
-def _target_from_attribute(attr: Any) -> Target:
-    """Convert an attribute object to a Target.
-
-    Handles Attribute, PendingAttribute (from evo.objects.typed.dataset) and
-    BlockModelAttribute, BlockModelPendingAttribute (from evo.objects.typed.block_model_ref).
-
-    All attribute types use `_obj` to reference their parent object:
-    - For Attribute/PendingAttribute: _obj is a DownloadedObject
-    - For BlockModelAttribute/BlockModelPendingAttribute: _obj is a BlockModel
-
-    Args:
-        attr: An attribute object with to_target_dict() method and _obj reference.
-
-    Returns:
-        A Target instance configured based on the attribute.
-    """
-    # All attribute types now use _obj to reference their parent object
-    if not hasattr(attr, "_obj") or attr._obj is None:
-        raise TypeError(
-            f"Cannot determine target object from attribute type {type(attr).__name__}. "
-            "Attribute must have an _obj reference to its parent object."
-        )
-
-    target_object = attr._obj
-
-    # Get the attribute specification dict
-    attr_dict = attr.to_target_dict()
-
-    return Target(object=target_object, attribute=attr_dict)
 
 
 # =============================================================================

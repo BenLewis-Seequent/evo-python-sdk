@@ -14,6 +14,13 @@
 from unittest import TestCase
 from unittest.mock import MagicMock
 
+from evo.objects.typed.attributes import (
+    Attribute,
+    BlockModelAttribute,
+    BlockModelPendingAttribute,
+    PendingAttribute,
+)
+
 from evo.compute.tasks import (
     BlockDiscretisation,
     CreateAttribute,
@@ -23,71 +30,199 @@ from evo.compute.tasks import (
     Target,
     UpdateAttribute,
 )
-from evo.compute.tasks.common import Ellipsoid, EllipsoidRanges
+from evo.compute.tasks.common import (
+    Ellipsoid,
+    EllipsoidRanges,
+    get_attribute_expression,
+    is_typed_attribute,
+    source_from_attribute,
+    target_from_attribute,
+)
 from evo.compute.tasks.kriging import KrigingParameters
+
+
+def _create_mock_source_attribute(name: str, key: str, object_url: str, schema_path: str = "") -> MagicMock:
+    """Create a mock Attribute (existing) that passes isinstance checks.
+
+    Uses ``spec=Attribute`` so ``isinstance(mock, Attribute)`` returns True.
+    Sets the underlying properties that the adapter functions inspect.
+    """
+    attr = MagicMock(spec=Attribute)
+    attr.name = name
+    attr.key = key
+    attr.exists = True
+
+    # ModelContext-like _context
+    mock_context = MagicMock()
+    mock_context.schema_path = schema_path
+    attr._context = mock_context
+
+    # Parent object
+    mock_obj = MagicMock()
+    mock_obj.metadata.url = object_url
+    attr._obj = mock_obj
+
+    return attr
+
+
+def _create_pending_attribute(name: str, parent_obj: MagicMock | None = None) -> PendingAttribute:
+    """Create a real PendingAttribute with an optional mock parent."""
+    mock_parent = MagicMock()
+    mock_parent._obj = parent_obj
+    return PendingAttribute(mock_parent, name)
+
+
+class TestAttributeAdapters(TestCase):
+    """Tests for the attribute adapter functions in source_target."""
+
+    # ---- is_typed_attribute ----
+
+    def test_is_typed_attribute_with_attribute(self):
+        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/obj")
+        self.assertTrue(is_typed_attribute(attr))
+
+    def test_is_typed_attribute_with_pending_attribute(self):
+        pending = _create_pending_attribute("new_attr")
+        self.assertTrue(is_typed_attribute(pending))
+
+    def test_is_typed_attribute_with_block_model_attribute(self):
+        bm_attr = BlockModelAttribute(name="grade", attribute_type="Float64")
+        self.assertTrue(is_typed_attribute(bm_attr))
+
+    def test_is_typed_attribute_with_block_model_pending_attribute(self):
+        bm_pending = BlockModelPendingAttribute(obj=None, name="new_col")
+        self.assertTrue(is_typed_attribute(bm_pending))
+
+    def test_is_typed_attribute_with_string(self):
+        self.assertFalse(is_typed_attribute("some_string"))
+
+    def test_is_typed_attribute_with_source(self):
+        source = Source(object="https://example.com/obj", attribute="grade")
+        self.assertFalse(is_typed_attribute(source))
+
+    # ---- get_attribute_expression ----
+
+    def test_expression_for_attribute_with_schema_path(self):
+        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/obj", schema_path="locations.attributes")
+        result = get_attribute_expression(attr)
+        self.assertEqual(result, "locations.attributes[?key=='abc-key']")
+
+    def test_expression_for_attribute_without_schema_path(self):
+        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/obj", schema_path="")
+        result = get_attribute_expression(attr)
+        self.assertEqual(result, "attributes[?key=='abc-key']")
+
+    def test_expression_for_pending_attribute(self):
+        pending = _create_pending_attribute("my_attribute")
+        result = get_attribute_expression(pending)
+        self.assertEqual(result, "attributes[?name=='my_attribute']")
+
+    def test_expression_for_block_model_attribute(self):
+        bm_attr = BlockModelAttribute(name="grade", attribute_type="Float64")
+        result = get_attribute_expression(bm_attr)
+        self.assertEqual(result, "attributes[?name=='grade']")
+
+    def test_expression_for_block_model_pending_attribute(self):
+        bm_pending = BlockModelPendingAttribute(obj=None, name="new_col")
+        result = get_attribute_expression(bm_pending)
+        self.assertEqual(result, "attributes[?name=='new_col']")
+
+    def test_expression_raises_for_invalid_type(self):
+        with self.assertRaises(TypeError):
+            get_attribute_expression("not_an_attribute")
+
+    # ---- source_from_attribute ----
+
+    def test_source_from_existing_attribute(self):
+        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/pointset", schema_path="locations.attributes")
+        result = source_from_attribute(attr)
+        self.assertIsInstance(result, Source)
+        result_dict = result.to_dict()
+        self.assertEqual(result_dict["object"], "https://example.com/pointset")
+        self.assertEqual(result_dict["attribute"], "locations.attributes[?key=='abc-key']")
+
+    def test_source_from_attribute_without_schema_path(self):
+        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/pointset", schema_path="")
+        result = source_from_attribute(attr)
+        result_dict = result.to_dict()
+        self.assertEqual(result_dict["object"], "https://example.com/pointset")
+        self.assertEqual(result_dict["attribute"], "attributes[?key=='abc-key']")
+
+    def test_source_from_attribute_raises_for_pending(self):
+        pending = _create_pending_attribute("new_attr")
+        with self.assertRaises(TypeError):
+            source_from_attribute(pending)
+
+    def test_source_from_attribute_raises_for_block_model_attribute(self):
+        bm_attr = BlockModelAttribute(name="grade", attribute_type="Float64")
+        with self.assertRaises(TypeError):
+            source_from_attribute(bm_attr)
+
+    def test_source_from_attribute_raises_for_string(self):
+        with self.assertRaises(TypeError):
+            source_from_attribute("not_an_attribute")
+
+    # ---- target_from_attribute ----
+
+    def test_target_from_existing_attribute(self):
+        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/obj", schema_path="locations.attributes")
+        result = target_from_attribute(attr)
+        self.assertIsInstance(result, Target)
+        result_dict = result.to_dict()
+        self.assertEqual(result_dict["attribute"]["operation"], "update")
+        self.assertEqual(result_dict["attribute"]["reference"], "locations.attributes[?key=='abc-key']")
+
+    def test_target_from_pending_attribute(self):
+        mock_obj = MagicMock()
+        mock_obj.metadata.url = "https://example.com/grid"
+        pending = _create_pending_attribute("new_column", parent_obj=mock_obj)
+        result = target_from_attribute(pending)
+        self.assertIsInstance(result, Target)
+        result_dict = result.to_dict()
+        self.assertEqual(result_dict["attribute"]["operation"], "create")
+        self.assertEqual(result_dict["attribute"]["name"], "new_column")
+
+    def test_target_from_block_model_existing_attribute(self):
+        mock_bm = MagicMock()
+        mock_bm.metadata.url = "https://example.com/blockmodel"
+        bm_attr = BlockModelAttribute(name="grade", attribute_type="Float64", obj=mock_bm)
+        result = target_from_attribute(bm_attr)
+        self.assertIsInstance(result, Target)
+        result_dict = result.to_dict()
+        self.assertEqual(result_dict["attribute"]["operation"], "update")
+        self.assertEqual(result_dict["attribute"]["reference"], "attributes[?name=='grade']")
+
+    def test_target_from_block_model_pending_attribute(self):
+        mock_bm = MagicMock()
+        mock_bm.metadata.url = "https://example.com/blockmodel"
+        bm_pending = BlockModelPendingAttribute(obj=mock_bm, name="new_col")
+        result = target_from_attribute(bm_pending)
+        self.assertIsInstance(result, Target)
+        result_dict = result.to_dict()
+        self.assertEqual(result_dict["attribute"]["operation"], "create")
+        self.assertEqual(result_dict["attribute"]["name"], "new_col")
+
+    def test_target_from_attribute_raises_for_invalid_type(self):
+        with self.assertRaises(TypeError):
+            target_from_attribute("not_an_attribute")
+
+    def test_target_from_attribute_raises_for_none_obj(self):
+        bm_pending = BlockModelPendingAttribute(obj=None, name="new_col")
+        with self.assertRaises(TypeError):
+            target_from_attribute(bm_pending)
 
 
 class TestKrigingParametersWithAttributes(TestCase):
     """Tests for KrigingParameters handling of typed attribute objects."""
 
-    def _create_mock_attribute(self, name: str, exists: bool, object_url: str) -> MagicMock:
-        """Create a mock attribute that behaves like Attribute or PendingAttribute."""
-        attr = MagicMock()
-        attr.name = name
-        attr.exists = exists
-        attr.expression = f"locations.attributes[?name=='{name}']"
-
-        # Mock the _obj for object URL access
-        mock_obj = MagicMock()
-        mock_obj.metadata.url = object_url
-        attr._obj = mock_obj
-
-        if exists:
-            attr.to_target_dict.return_value = {
-                "operation": "update",
-                "reference": attr.expression,
-            }
-        else:
-            attr.to_target_dict.return_value = {
-                "operation": "create",
-                "name": name,
-            }
-
-        return attr
-
-    def _create_mock_block_model_attribute(self, name: str, exists: bool, object_url: str) -> MagicMock:
-        """Create a mock BlockModelAttribute or BlockModelPendingAttribute."""
-        attr = MagicMock()
-        attr.name = name
-        attr.exists = exists
-        attr.expression = f"attributes[?name=='{name}']"
-
-        # Mock the _obj for object URL access (unified interface with Attribute)
-        mock_bm = MagicMock()
-        mock_bm.metadata.url = object_url
-        attr._obj = mock_bm
-
-        if exists:
-            attr.to_target_dict.return_value = {
-                "operation": "update",
-                "reference": attr.expression,
-            }
-        else:
-            attr.to_target_dict.return_value = {
-                "operation": "create",
-                "name": name,
-            }
-
-        return attr
-
     def test_kriging_params_with_pending_attribute_target(self):
         """Test KrigingParameters accepts PendingAttribute as target."""
         source = Source(object="https://example.com/pointset", attribute="locations.attributes[?name=='grade']")
-        target_attr = self._create_mock_attribute(
-            name="kriged_grade",
-            exists=False,
-            object_url="https://example.com/grid",
-        )
+
+        mock_obj = MagicMock()
+        mock_obj.metadata.url = "https://example.com/grid"
+        target_attr = _create_pending_attribute("kriged_grade", parent_obj=mock_obj)
+
         variogram = "https://example.com/variogram"
         search = SearchNeighborhood(
             ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
@@ -101,7 +236,6 @@ class TestKrigingParametersWithAttributes(TestCase):
             search=search,
         )
 
-        # Verify the target was converted correctly
         params_dict = params.to_dict()
         self.assertEqual(params_dict["target"]["object"], "https://example.com/grid")
         self.assertEqual(params_dict["target"]["attribute"]["operation"], "create")
@@ -110,11 +244,13 @@ class TestKrigingParametersWithAttributes(TestCase):
     def test_kriging_params_with_existing_attribute_target(self):
         """Test KrigingParameters accepts existing Attribute as target."""
         source = Source(object="https://example.com/pointset", attribute="locations.attributes[?name=='grade']")
-        target_attr = self._create_mock_attribute(
+        target_attr = _create_mock_source_attribute(
             name="existing_attr",
-            exists=True,
+            key="exist-key",
             object_url="https://example.com/grid",
+            schema_path="locations.attributes",
         )
+
         variogram = "https://example.com/variogram"
         search = SearchNeighborhood(
             ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
@@ -128,7 +264,6 @@ class TestKrigingParametersWithAttributes(TestCase):
             search=search,
         )
 
-        # Verify the target was converted correctly
         params_dict = params.to_dict()
         self.assertEqual(params_dict["target"]["object"], "https://example.com/grid")
         self.assertEqual(params_dict["target"]["attribute"]["operation"], "update")
@@ -137,11 +272,11 @@ class TestKrigingParametersWithAttributes(TestCase):
     def test_kriging_params_with_block_model_pending_attribute(self):
         """Test KrigingParameters accepts BlockModelPendingAttribute as target."""
         source = Source(object="https://example.com/pointset", attribute="locations.attributes[?name=='grade']")
-        target_attr = self._create_mock_block_model_attribute(
-            name="new_bm_attr",
-            exists=False,
-            object_url="https://example.com/blockmodel",
-        )
+
+        mock_bm = MagicMock()
+        mock_bm.metadata.url = "https://example.com/blockmodel"
+        target_attr = BlockModelPendingAttribute(obj=mock_bm, name="new_bm_attr")
+
         variogram = "https://example.com/variogram"
         search = SearchNeighborhood(
             ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
@@ -155,7 +290,6 @@ class TestKrigingParametersWithAttributes(TestCase):
             search=search,
         )
 
-        # Verify the target was converted correctly
         params_dict = params.to_dict()
         self.assertEqual(params_dict["target"]["object"], "https://example.com/blockmodel")
         self.assertEqual(params_dict["target"]["attribute"]["operation"], "create")
@@ -164,11 +298,15 @@ class TestKrigingParametersWithAttributes(TestCase):
     def test_kriging_params_with_block_model_existing_attribute(self):
         """Test KrigingParameters accepts existing BlockModelAttribute as target."""
         source = Source(object="https://example.com/pointset", attribute="locations.attributes[?name=='grade']")
-        target_attr = self._create_mock_block_model_attribute(
+
+        mock_bm = MagicMock()
+        mock_bm.metadata.url = "https://example.com/blockmodel"
+        target_attr = BlockModelAttribute(
             name="existing_bm_attr",
-            exists=True,
-            object_url="https://example.com/blockmodel",
+            attribute_type="Float64",
+            obj=mock_bm,
         )
+
         variogram = "https://example.com/variogram"
         search = SearchNeighborhood(
             ellipsoid=Ellipsoid(ranges=EllipsoidRanges(100, 100, 50)),
@@ -182,7 +320,6 @@ class TestKrigingParametersWithAttributes(TestCase):
             search=search,
         )
 
-        # Verify the target was converted correctly
         params_dict = params.to_dict()
         self.assertEqual(params_dict["target"]["object"], "https://example.com/blockmodel")
         self.assertEqual(params_dict["target"]["attribute"]["operation"], "update")
@@ -205,7 +342,6 @@ class TestKrigingParametersWithAttributes(TestCase):
             search=search,
         )
 
-        # Verify the target works correctly
         params_dict = params.to_dict()
         self.assertEqual(params_dict["target"]["object"], "https://example.com/grid")
         self.assertEqual(params_dict["target"]["attribute"]["operation"], "create")
@@ -213,17 +349,12 @@ class TestKrigingParametersWithAttributes(TestCase):
 
     def test_kriging_params_source_attribute_conversion(self):
         """Test KrigingParameters converts source Attribute correctly."""
-        # Create mock source attribute
-        source_attr = MagicMock()
-        source_attr.expression = "locations.attributes[?key=='grade']"
-        mock_obj = MagicMock()
-        mock_obj.metadata.url = "https://example.com/pointset"
-        source_attr._obj = mock_obj
-        # Mock to_source_dict method (the new pattern for Attribute)
-        source_attr.to_source_dict.return_value = {
-            "object": "https://example.com/pointset",
-            "attribute": "locations.attributes[?key=='grade']",
-        }
+        source_attr = _create_mock_source_attribute(
+            name="grade",
+            key="grade-key",
+            object_url="https://example.com/pointset",
+            schema_path="locations.attributes",
+        )
 
         target = Target.new_attribute("https://example.com/grid", "kriged_grade")
         variogram = "https://example.com/variogram"
@@ -239,10 +370,9 @@ class TestKrigingParametersWithAttributes(TestCase):
             search=search,
         )
 
-        # Verify the source was converted correctly
         params_dict = params.to_dict()
         self.assertEqual(params_dict["source"]["object"], "https://example.com/pointset")
-        self.assertEqual(params_dict["source"]["attribute"], "locations.attributes[?key=='grade']")
+        self.assertEqual(params_dict["source"]["attribute"], "locations.attributes[?key=='grade-key']")
 
 
 class TestTargetSerialization(TestCase):
@@ -328,12 +458,11 @@ class TestRegionFilter(TestCase):
         self.assertNotIn("names", result)
 
     def test_region_filter_with_block_model_attribute(self):
-        """Test RegionFilter with BlockModelAttribute-like object."""
-        mock_attr = MagicMock()
-        mock_attr.expression = "attributes[?name=='domain']"
+        """Test RegionFilter with a real BlockModelAttribute."""
+        bm_attr = BlockModelAttribute(name="domain", attribute_type="category")
 
         region_filter = RegionFilter(
-            attribute=mock_attr,
+            attribute=bm_attr,
             names=["Zone1"],
         )
 
@@ -343,14 +472,13 @@ class TestRegionFilter(TestCase):
         self.assertEqual(result["names"], ["Zone1"])
 
     def test_region_filter_with_pointset_attribute(self):
-        """Test RegionFilter with PointSet attribute-like object."""
-        mock_attr = MagicMock()
-        mock_attr.to_source_dict.return_value = {
-            "object": "https://example.com/pointset",
-            "attribute": "locations.attributes[?name=='domain']",
-        }
-        # Remove expression attribute so it falls through to to_source_dict
-        del mock_attr.expression
+        """Test RegionFilter with a PointSet Attribute (mock with spec)."""
+        mock_attr = _create_mock_source_attribute(
+            name="domain",
+            key="domain-key",
+            object_url="https://example.com/pointset",
+            schema_path="locations.attributes",
+        )
 
         region_filter = RegionFilter(
             attribute=mock_attr,
@@ -359,8 +487,22 @@ class TestRegionFilter(TestCase):
 
         result = region_filter.to_dict()
 
-        self.assertEqual(result["attribute"], "locations.attributes[?name=='domain']")
+        self.assertEqual(result["attribute"], "locations.attributes[?key=='domain-key']")
         self.assertEqual(result["names"], ["Domain1"])
+
+    def test_region_filter_with_pending_attribute(self):
+        """Test RegionFilter with a PendingAttribute."""
+        pending = _create_pending_attribute("domain")
+
+        region_filter = RegionFilter(
+            attribute=pending,
+            names=["Zone1"],
+        )
+
+        result = region_filter.to_dict()
+
+        self.assertEqual(result["attribute"], "attributes[?name=='domain']")
+        self.assertEqual(result["names"], ["Zone1"])
 
     def test_region_filter_cannot_have_both_names_and_values(self):
         """Test RegionFilter raises error when both names and values are provided."""
@@ -381,6 +523,12 @@ class TestRegionFilter(TestCase):
             )
 
         self.assertIn("One of 'names' or 'values' must be provided", str(context.exception))
+
+    def test_region_filter_raises_for_unsupported_type(self):
+        """Test RegionFilter raises TypeError for unsupported attribute type."""
+        with self.assertRaises(TypeError):
+            region_filter = RegionFilter(attribute=12345, names=["Zone1"])
+            region_filter.to_dict()
 
 
 class TestKrigingParametersWithRegionFilter(TestCase):

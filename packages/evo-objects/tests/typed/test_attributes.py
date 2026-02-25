@@ -61,16 +61,6 @@ class TestPendingAttribute(TestCase):
         pending = PendingAttribute(None, "test_attr")
         self.assertFalse(pending.exists)
 
-    def test_pending_attribute_expression(self):
-        """Test that PendingAttribute.expression returns correct JMESPath."""
-        pending = PendingAttribute(None, "my_attribute")
-        self.assertEqual(pending.expression, "attributes[?name=='my_attribute']")
-
-    def test_pending_attribute_to_target_dict(self):
-        """Test that PendingAttribute.to_target_dict returns create operation."""
-        pending = PendingAttribute(None, "new_column")
-        result = pending.to_target_dict()
-        self.assertEqual(result, {"operation": "create", "name": "new_column"})
 
     def test_pending_attribute_repr(self):
         """Test that PendingAttribute has a useful repr."""

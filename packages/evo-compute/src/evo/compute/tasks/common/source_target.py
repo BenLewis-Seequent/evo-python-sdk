@@ -16,22 +16,68 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Union
 
+from evo.objects.typed.attributes import (
+    Attribute,
+    BlockModelAttribute,
+    BlockModelPendingAttribute,
+    PendingAttribute,
+)
 from typing_extensions import TypeAlias
 
 __all__ = [
     "CreateAttribute",
+    "GeoscienceObjectReference",
     "Source",
     "Target",
     "UpdateAttribute",
+    "get_attribute_expression",
+    "is_typed_attribute",
+    "serialize_object_reference",
+    "source_from_attribute",
+    "target_from_attribute",
 ]
 
+# All typed attribute types that compute tasks can work with.
+TYPED_ATTRIBUTE_TYPES = (Attribute, PendingAttribute, BlockModelAttribute, BlockModelPendingAttribute)
 
 # Type alias for any object that can be serialized to a geoscience object reference URL
 # Supports: str, ObjectReference, BaseObject, DownloadedObject, ObjectMetadata
 GeoscienceObjectReference: TypeAlias = Union[str, Any]
 
 
-def _serialize_object_reference(value: GeoscienceObjectReference) -> str:
+def is_typed_attribute(value: Any) -> bool:
+    """Check if a value is a typed attribute object from evo.objects.typed."""
+    return isinstance(value, TYPED_ATTRIBUTE_TYPES)
+
+
+def get_attribute_expression(attr: Attribute | PendingAttribute | BlockModelAttribute | BlockModelPendingAttribute) -> str:
+    """Get the JMESPath expression to access an attribute from its parent object.
+
+    For ``Attribute`` (existing, from a DownloadedObject): uses the schema path context
+    and key-based lookup, e.g. ``"locations.attributes[?key=='abc']"``.
+
+    For ``PendingAttribute``, ``BlockModelAttribute``, or ``BlockModelPendingAttribute``:
+    uses name-based lookup, e.g. ``"attributes[?name=='grade']"``.
+
+    Args:
+        attr: A typed attribute object.
+
+    Returns:
+        A JMESPath expression string.
+
+    Raises:
+        TypeError: If the attribute type is not recognised.
+    """
+    if isinstance(attr, Attribute):
+        base_path = attr._context.schema_path or "attributes"
+        return f"{base_path}[?key=='{attr.key}']"
+    elif isinstance(attr, (PendingAttribute, BlockModelAttribute, BlockModelPendingAttribute)):
+        return f"attributes[?name=='{attr.name}']"
+    else:
+        raise TypeError(f"Cannot get expression for attribute type {type(attr).__name__}")
+
+
+def serialize_object_reference(value: GeoscienceObjectReference) -> str:
     """
     Serialize an object reference to a string URL.
 
@@ -98,7 +144,7 @@ class Source:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
-            "object": _serialize_object_reference(self.object),
+            "object": serialize_object_reference(self.object),
             "attribute": self.attribute,
         }
 
@@ -190,6 +236,84 @@ class Target:
             attribute_value = self.attribute
 
         return {
-            "object": _serialize_object_reference(self.object),
+            "object": serialize_object_reference(self.object),
             "attribute": attribute_value,
         }
+
+
+# =============================================================================
+# Typed attribute → Source / Target conversion
+# =============================================================================
+
+
+def source_from_attribute(attr: Attribute) -> Source:
+    """Convert a typed ``Attribute`` to a :class:`Source`.
+
+    Only ``Attribute`` (an existing attribute on a DownloadedObject) can be used
+    as a source, since source data must already exist.
+
+    Args:
+        attr: An existing ``Attribute`` from a DownloadedObject.
+
+    Returns:
+        A :class:`Source` referencing the parent object and attribute expression.
+
+    Raises:
+        TypeError: If *attr* is not an ``Attribute`` instance.
+    """
+    if not isinstance(attr, Attribute):
+        raise TypeError(
+            f"Only Attribute (from a DownloadedObject) can be used as a source, "
+            f"got {type(attr).__name__}"
+        )
+
+    return Source(
+        object=str(attr._obj.metadata.url),
+        attribute=get_attribute_expression(attr),
+    )
+
+
+def target_from_attribute(
+    attr: Attribute | PendingAttribute | BlockModelAttribute | BlockModelPendingAttribute,
+) -> Target:
+    """Convert a typed attribute object to a :class:`Target`.
+
+    Handles ``Attribute``, ``PendingAttribute``, ``BlockModelAttribute``, and
+    ``BlockModelPendingAttribute`` from ``evo.objects.typed.attributes``.
+
+    For existing attributes, returns an update operation referencing the attribute.
+    For pending attributes, returns a create operation with the attribute name.
+
+    Args:
+        attr: A typed attribute object. Must have a non-``None`` ``_obj``
+            reference to its parent object.
+
+    Returns:
+        A :class:`Target` configured based on the attribute.
+
+    Raises:
+        TypeError: If *attr* is not a recognised typed attribute, or if it has
+            no ``_obj`` reference to its parent object.
+    """
+    if not is_typed_attribute(attr):
+        raise TypeError(
+            f"Cannot convert {type(attr).__name__} to a Target. "
+            "Expected Attribute, PendingAttribute, BlockModelAttribute, or BlockModelPendingAttribute."
+        )
+
+    if attr._obj is None:
+        raise TypeError(
+            f"Cannot determine target object from attribute type {type(attr).__name__}. "
+            "Attribute must have an _obj reference to its parent object."
+        )
+
+    if attr.exists:
+        attr_spec: CreateAttribute | UpdateAttribute = UpdateAttribute(
+            reference=get_attribute_expression(attr),
+        )
+    else:
+        attr_spec = CreateAttribute(name=attr.name)
+
+    return Target(object=attr._obj, attribute=attr_spec)
+
+

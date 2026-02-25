@@ -472,6 +472,14 @@ class BlockModelAttributes:
             )
             self._attributes.append(attr_with_obj)
 
+    @property
+    def exists(self) -> bool:
+        """Whether this attribute exists on the block model.
+
+        :return: True for existing attributes.
+        """
+        return True
+
     @classmethod
     def from_schema(cls, attributes_list: list[dict], block_model: BlockModel | None = None) -> BlockModelAttributes:
         """Parse block model attributes from the schema format.
