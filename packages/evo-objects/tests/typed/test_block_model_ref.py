@@ -17,14 +17,14 @@ from evo.objects.typed import (
     BlockModelData,
     BlockModelGeometry,
     Point3,
+    RegularBlockModelData,
+    Rotation,
     Size3d,
     Size3i,
 )
-from evo.objects.typed.block_model_ref import (
-    _parse_attributes,
-    _parse_geometry,
-    _serialize_attributes,
-    _serialize_geometry,
+from evo.objects.typed.attributes import (
+    BlockModelAttributes,
+    BlockModelPendingAttribute,
 )
 
 
@@ -51,10 +51,10 @@ class TestBlockModelGeometry(TestCase):
             origin=Point3(0, 0, 0),
             n_blocks=Size3i(10, 10, 10),
             block_size=Size3d(1.0, 1.0, 1.0),
-            rotation=(45.0, 30.0, 15.0),
+            rotation=Rotation(dip_azimuth=45.0, dip=30.0, pitch=15.0),
         )
 
-        self.assertEqual(geom.rotation, (45.0, 30.0, 15.0))
+        self.assertEqual(geom.rotation, Rotation(dip_azimuth=45.0, dip=30.0, pitch=15.0))
 
 
 class TestBlockModelAttribute(TestCase):
@@ -133,97 +133,7 @@ class TestBlockModelData(TestCase):
         self.assertEqual(bbox.max_z, 390.0)  # 300 + 30 * 3
 
 
-class TestGeometrySerialization(TestCase):
-    def test_parse_geometry(self):
-        """Test parsing geometry from dictionary."""
-        geometry_dict = {
-            "model_type": "regular",
-            "origin": [1.0, 2.0, 3.0],
-            "n_blocks": [10, 20, 30],
-            "block_size": [1.5, 2.5, 3.5],
-        }
-
-        geom = _parse_geometry(geometry_dict)
-
-        self.assertEqual(geom.model_type, "regular")
-        self.assertEqual(geom.origin, Point3(1.0, 2.0, 3.0))
-        self.assertEqual(geom.n_blocks, Size3i(10, 20, 30))
-        self.assertEqual(geom.block_size, Size3d(1.5, 2.5, 3.5))
-        self.assertIsNone(geom.rotation)
-
-    def test_parse_geometry_with_rotation(self):
-        """Test parsing geometry with rotation."""
-        geometry_dict = {
-            "model_type": "regular",
-            "origin": [0, 0, 0],
-            "n_blocks": [10, 10, 10],
-            "block_size": [1, 1, 1],
-            "rotation": {
-                "dip_azimuth": 45.0,
-                "dip": 30.0,
-                "pitch": 15.0,
-            },
-        }
-
-        geom = _parse_geometry(geometry_dict)
-
-        self.assertEqual(geom.rotation, (45.0, 30.0, 15.0))
-
-    def test_serialize_geometry(self):
-        """Test serializing geometry to dictionary."""
-        geom = BlockModelGeometry(
-            model_type="regular",
-            origin=Point3(1.0, 2.0, 3.0),
-            n_blocks=Size3i(10, 20, 30),
-            block_size=Size3d(1.5, 2.5, 3.5),
-        )
-
-        result = _serialize_geometry(geom)
-
-        self.assertEqual(result["model_type"], "regular")
-        self.assertEqual(result["origin"], [1.0, 2.0, 3.0])
-        self.assertEqual(result["n_blocks"], [10, 20, 30])
-        self.assertEqual(result["block_size"], [1.5, 2.5, 3.5])
-        self.assertNotIn("rotation", result)
-
-    def test_serialize_geometry_with_rotation(self):
-        """Test serializing geometry with rotation."""
-        geom = BlockModelGeometry(
-            model_type="regular",
-            origin=Point3(0, 0, 0),
-            n_blocks=Size3i(10, 10, 10),
-            block_size=Size3d(1, 1, 1),
-            rotation=(45.0, 30.0, 15.0),
-        )
-
-        result = _serialize_geometry(geom)
-
-        self.assertIn("rotation", result)
-        self.assertEqual(result["rotation"]["dip_azimuth"], 45.0)
-        self.assertEqual(result["rotation"]["dip"], 30.0)
-        self.assertEqual(result["rotation"]["pitch"], 15.0)
-
-    def test_round_trip_geometry(self):
-        """Test round-trip serialization of geometry."""
-        original = BlockModelGeometry(
-            model_type="regular",
-            origin=Point3(100.0, 200.0, 300.0),
-            n_blocks=Size3i(10, 20, 30),
-            block_size=Size3d(1.5, 2.5, 3.5),
-            rotation=(45.0, 30.0, 15.0),
-        )
-
-        serialized = _serialize_geometry(original)
-        parsed = _parse_geometry(serialized)
-
-        self.assertEqual(original.model_type, parsed.model_type)
-        self.assertEqual(original.origin, parsed.origin)
-        self.assertEqual(original.n_blocks, parsed.n_blocks)
-        self.assertEqual(original.block_size, parsed.block_size)
-        self.assertEqual(original.rotation, parsed.rotation)
-
-
-class TestAttributeSerialization(TestCase):
+class TestAttributeParsing(TestCase):
     def test_parse_attributes(self):
         """Test parsing attributes from list of dictionaries."""
         attrs_list = [
@@ -239,7 +149,7 @@ class TestAttributeSerialization(TestCase):
             },
         ]
 
-        attrs = _parse_attributes(attrs_list)
+        attrs = BlockModelAttributes.from_schema(attrs_list)
 
         self.assertEqual(len(attrs), 2)
         self.assertEqual(attrs[0].name, "grade")
@@ -269,7 +179,7 @@ class TestAttributeSerialization(TestCase):
             },
         ]
 
-        attrs = _parse_attributes(attrs_list)
+        attrs = BlockModelAttributes.from_schema(attrs_list)
 
         self.assertEqual(len(attrs), 3)
         # Invalid UUIDs should result in None
@@ -289,7 +199,7 @@ class TestAttributeSerialization(TestCase):
             },
         ]
 
-        attrs = _parse_attributes(attrs_list)
+        attrs = BlockModelAttributes.from_schema(attrs_list)
 
         self.assertEqual(len(attrs), 1)
         self.assertIsNone(attrs[0].block_model_column_uuid)
@@ -303,37 +213,10 @@ class TestAttributeSerialization(TestCase):
             },
         ]
 
-        attrs = _parse_attributes(attrs_list)
+        attrs = BlockModelAttributes.from_schema(attrs_list)
 
         self.assertEqual(len(attrs), 1)
         self.assertIsNone(attrs[0].block_model_column_uuid)
-
-    def test_serialize_attributes(self):
-        """Test serializing attributes to list of dictionaries."""
-        col_uuid = uuid.uuid4()
-        attrs = [
-            BlockModelAttribute(
-                name="grade",
-                attribute_type="Float64",
-                block_model_column_uuid=col_uuid,
-                unit="g/t",
-            ),
-            BlockModelAttribute(
-                name="density",
-                attribute_type="Float32",
-            ),
-        ]
-
-        result = _serialize_attributes(attrs)
-
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["name"], "grade")
-        self.assertEqual(result[0]["attribute_type"], "Float64")
-        self.assertEqual(result[0]["unit"], "g/t")
-        self.assertEqual(result[0]["block_model_column_uuid"], str(col_uuid))
-        self.assertEqual(result[1]["name"], "density")
-        self.assertNotIn("unit", result[1])
-        self.assertNotIn("block_model_column_uuid", result[1])
 
 
 class TestBlockModelAttributeTarget(TestCase):
@@ -347,57 +230,14 @@ class TestBlockModelAttributeTarget(TestCase):
         )
         self.assertTrue(attr.exists)
 
-    def test_existing_attribute_to_target_dict(self):
-        """Test that existing attributes serialize to update operation with name-based reference."""
-        attr = BlockModelAttribute(
-            name="grade",
-            attribute_type="Float64",
-        )
-        target_dict = attr.to_target_dict()
-
-        self.assertEqual(target_dict["operation"], "update")
-        self.assertIn("reference", target_dict)
-        self.assertEqual(target_dict["reference"], "attributes[?name=='grade']")
-
-    def test_existing_attribute_expression(self):
-        """Test that existing attributes have correct JMESPath expression."""
-        attr = BlockModelAttribute(
-            name="grade",
-            attribute_type="Float64",
-        )
-        self.assertEqual(attr.expression, "attributes[?name=='grade']")
-
     def test_pending_attribute_exists_property(self):
         """Test that pending attributes have exists=False."""
-        from evo.objects.typed.block_model_ref import BlockModelPendingAttribute
-
         pending = BlockModelPendingAttribute(None, "new_attribute")
 
         self.assertFalse(pending.exists)
 
-    def test_pending_attribute_to_target_dict(self):
-        """Test that pending attributes serialize to create operation."""
-        from evo.objects.typed.block_model_ref import BlockModelPendingAttribute
-
-        pending = BlockModelPendingAttribute(None, "new_attribute")
-        target_dict = pending.to_target_dict()
-
-        self.assertEqual(target_dict["operation"], "create")
-        self.assertEqual(target_dict["name"], "new_attribute")
-
-    def test_pending_attribute_expression(self):
-        """Test that pending attributes have correct JMESPath expression."""
-        from evo.objects.typed.block_model_ref import BlockModelPendingAttribute
-
-        pending = BlockModelPendingAttribute(None, "new_attribute")
-
-        self.assertIn("new_attribute", pending.expression)
-        self.assertIn("attributes", pending.expression)
-
     def test_pending_attribute_repr(self):
         """Test the string representation of BlockModelPendingAttribute."""
-        from evo.objects.typed.block_model_ref import BlockModelPendingAttribute
-
         pending = BlockModelPendingAttribute(None, "new_attribute")
         repr_str = repr(pending)
 
@@ -407,8 +247,6 @@ class TestBlockModelAttributeTarget(TestCase):
 
     def test_attributes_getitem_returns_pending_for_missing(self):
         """Test that accessing a non-existent attribute returns PendingAttribute."""
-        from evo.objects.typed.block_model_ref import BlockModelAttributes, BlockModelPendingAttribute
-
         existing_attrs = [
             BlockModelAttribute(name="grade", attribute_type="Float64"),
         ]
@@ -426,8 +264,6 @@ class TestBlockModelAttributeTarget(TestCase):
 
     def test_attributes_getitem_by_index(self):
         """Test that accessing attributes by index works correctly."""
-        from evo.objects.typed.block_model_ref import BlockModelAttributes
-
         existing_attrs = [
             BlockModelAttribute(name="grade", attribute_type="Float64"),
             BlockModelAttribute(name="density", attribute_type="Float32"),
@@ -439,8 +275,6 @@ class TestBlockModelAttributeTarget(TestCase):
 
     def test_attribute_has_obj_reference(self):
         """Test that attributes have _obj reference to the parent BlockModel."""
-        from evo.objects.typed.block_model_ref import BlockModelAttributes
-
         # Create a mock block model (using None for simplicity in unit tests)
         mock_block_model = "mock_block_model"  # In real use, this would be a BlockModel instance
 
@@ -455,8 +289,6 @@ class TestBlockModelAttributeTarget(TestCase):
 
     def test_pending_attribute_has_obj_reference(self):
         """Test that pending attributes have _obj reference to the parent BlockModel."""
-        from evo.objects.typed.block_model_ref import BlockModelAttributes, BlockModelPendingAttribute
-
         # Create a mock block model
         mock_block_model = "mock_block_model"
 
@@ -473,29 +305,23 @@ class TestBlockModelOptionalDependency(TestCase):
     evo-blockmodels availability, and that data operations correctly use evo-blockmodels."""
 
     def test_geometry_always_available(self):
-        """Test that geometry parsing works without data operations."""
-        from evo.objects.typed.block_model_ref import _parse_geometry
-
-        geometry_dict = {
-            "model_type": "regular",
-            "origin": [100.0, 200.0, 300.0],
-            "n_blocks": [10, 20, 30],
-            "block_size": [1.0, 2.0, 3.0],
-        }
-
-        geom = _parse_geometry(geometry_dict)
+        """Test that geometry types work without data operations."""
+        geom = BlockModelGeometry(
+            model_type="regular",
+            origin=Point3(100.0, 200.0, 300.0),
+            n_blocks=Size3i(10, 20, 30),
+            block_size=Size3d(1.0, 2.0, 3.0),
+        )
         self.assertEqual(geom.model_type, "regular")
         self.assertEqual(geom.origin.x, 100.0)
 
     def test_attributes_always_available(self):
         """Test that attribute parsing works without data operations."""
-        from evo.objects.typed.block_model_ref import _parse_attributes
-
         attrs_list = [
             {"name": "grade", "attribute_type": "Float64"},
         ]
 
-        attrs = _parse_attributes(attrs_list)
+        attrs = BlockModelAttributes.from_schema(attrs_list)
         self.assertEqual(len(attrs), 1)
         self.assertEqual(attrs[0].name, "grade")
 
@@ -516,20 +342,9 @@ class TestBlockModelOptionalDependency(TestCase):
         self.assertEqual(bbox.min_x, 100.0)
         self.assertEqual(bbox.max_x, 110.0)
 
-    def test_require_blockmodels_function(self):
-        """Test that _require_blockmodels works when blockmodels IS available."""
-        from evo.objects.typed.block_model_ref import _BLOCKMODELS_AVAILABLE, _require_blockmodels
-
-        # In test environment, blockmodels should be available
-        self.assertTrue(_BLOCKMODELS_AVAILABLE)
-        # Should not raise when blockmodels is available
-        _require_blockmodels("Test operation")
-
     def test_regular_block_model_data_importable(self):
         """Test that RegularBlockModelData is importable from evo.objects.typed."""
-        from evo.objects.typed import RegularBlockModelData as RBD
-
-        data = RBD(
+        data = RegularBlockModelData(
             name="Test",
             origin=Point3(0, 0, 0),
             n_blocks=Size3i(10, 10, 10),
@@ -566,16 +381,3 @@ class TestBlockModelOptionalDependency(TestCase):
         bbox = CommonBBox.from_origin_and_size(p, s, sd)
         self.assertEqual(bbox.x_min, 1.0)
         self.assertEqual(bbox.x_max, 11.0)
-
-    def test_types_are_same_across_packages(self):
-        """Test that Point3/Size3d/Size3i from evo.common.typed and evo.objects.typed are the same type."""
-        from evo.common.typed import Point3 as CommonPoint3
-        from evo.common.typed import Size3d as CommonSize3d
-        from evo.common.typed import Size3i as CommonSize3i
-        from evo.objects.typed import Point3 as ObjectsPoint3
-        from evo.objects.typed import Size3d as ObjectsSize3d
-        from evo.objects.typed import Size3i as ObjectsSize3i
-
-        self.assertIs(CommonPoint3, ObjectsPoint3)
-        self.assertIs(CommonSize3d, ObjectsSize3d)
-        self.assertIs(CommonSize3i, ObjectsSize3i)

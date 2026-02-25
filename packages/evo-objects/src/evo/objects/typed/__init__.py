@@ -9,15 +9,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .attributes import Attribute, Attributes
+from ._grid import BlockModelData, BlockModelGeometry
+from .attributes import Attribute, Attributes, BlockModelAttribute, BlockModelAttributes, BlockModelPendingAttribute
 from .base import BaseObject, object_from_path, object_from_reference, object_from_uuid
 from .block_model_ref import (
     BlockModel,
-    BlockModelAttribute,
-    BlockModelAttributes,
-    BlockModelData,
-    BlockModelGeometry,
-    RegularBlockModelData,
 )
 from .pointset import (
     Locations,
@@ -73,6 +69,7 @@ __all__ = [
     "BlockModelAttributes",
     "BlockModelData",
     "BlockModelGeometry",
+    "BlockModelPendingAttribute",
     "BoundingBox",
     "CoordinateReferenceSystem",
     "CubicStructure",
@@ -90,7 +87,6 @@ __all__ = [
     "PointSetData",
     "Regular3DGrid",
     "Regular3DGridData",
-    "RegularBlockModelData",
     "RegularMasked3DGrid",
     "RegularMasked3DGridData",
     "Rotation",
@@ -114,6 +110,7 @@ try:
     from evo.blockmodels.typed import (  # noqa: F401
         Aggregation,
         MassUnits,
+        RegularBlockModelData,
         Report,
         ReportCategorySpec,
         ReportColumnSpec,
@@ -124,6 +121,7 @@ try:
     __all__ += [
         "Aggregation",
         "MassUnits",
+        "RegularBlockModelData",
         "Report",
         "ReportCategorySpec",
         "ReportColumnSpec",
