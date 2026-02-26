@@ -18,14 +18,14 @@ Example:
     >>> from evo.compute.tasks import run, SearchNeighborhood, Target
     >>> from evo.compute.tasks.kriging import KrigingParameters
     >>>
-    >>> # Run a single task
-    >>> result = await run(manager, KrigingParameters(...))
+    >>> # Run a single task (preview=True required for preview APIs like kriging)
+    >>> result = await run(manager, KrigingParameters(...), preview=True)
     >>>
     >>> # Run multiple tasks (same or different types)
     >>> results = await run(manager, [
     ...     KrigingParameters(...),
     ...     KrigingParameters(...),
-    ... ])
+    ... ], preview=True)
 """
 
 from __future__ import annotations
@@ -75,6 +75,7 @@ async def run(
     context: IContext,
     parameters: Any,
     *,
+    preview: bool = ...,
     fb: IFeedback | _DefaultFeedback = ...,
 ) -> TaskResult: ...
 
@@ -84,6 +85,7 @@ async def run(
     context: IContext,
     parameters: list[Any],
     *,
+    preview: bool = ...,
     fb: IFeedback | _DefaultFeedback = ...,
 ) -> TaskResults: ...
 
@@ -92,6 +94,7 @@ async def run(
     context: IContext,
     parameters: Any | list[Any],
     *,
+    preview: bool = False,
     fb: IFeedback | _DefaultFeedback = DEFAULT_FEEDBACK,
 ) -> TaskResult | TaskResults:
     """
@@ -103,6 +106,9 @@ async def run(
     Args:
         context: The context providing connector and org_id
         parameters: A single parameter object or list of parameters (can be mixed types)
+        preview: If True, sets the ``API-Preview: opt-in`` header on requests.
+            Required for tasks that are still in preview (e.g. kriging).
+            Defaults to False.
         fb: Feedback interface for progress updates. If not provided, uses default
             feedback showing "Running x/y..."
 
@@ -122,13 +128,13 @@ async def run(
         ...         max_samples=20,
         ...     ),
         ... )
-        >>> result = await run(manager, params)
+        >>> result = await run(manager, params, preview=True)
 
     Example (multiple tasks):
         >>> results = await run(manager, [
         ...     KrigingParameters(...),
         ...     KrigingParameters(...),
-        ... ])
+        ... ], preview=True)
         >>> results[0]  # Access first result
     """
     import asyncio
@@ -165,7 +171,7 @@ async def run(
     per_task_fb = split_feedback(actual_fb, [1.0] * total)
 
     async def _run_one(i: int, params: Any, runner, task_fb: IFeedback) -> tuple[int, Any]:
-        result = await runner(context, params)
+        result = await runner(context, params, preview=preview)
         # Mark this task's portion as complete (progress bar updates automatically via split_feedback)
         task_fb.progress(1.0)
         return i, result

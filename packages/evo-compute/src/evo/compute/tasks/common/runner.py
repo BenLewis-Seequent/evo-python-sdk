@@ -27,7 +27,7 @@ Example:
     ...     KrigingParameters(...),
     ...     SimulationParameters(...),
     ...     KrigingParameters(...),
-    ... ])
+    ... ], preview=True)
 """
 
 from __future__ import annotations
@@ -50,8 +50,8 @@ __all__ = [
 # Type for task results
 TResult = TypeVar("TResult")
 
-# Type for runner functions: async (context, params) -> result
-RunnerFunc = Callable[[IContext, Any], Awaitable[Any]]
+# Type for runner functions: async (context, params, *, preview) -> result
+RunnerFunc = Callable[..., Awaitable[Any]]
 
 
 class TaskRegistry:
@@ -159,6 +159,7 @@ async def run_tasks(
     parameters: list[Any],
     *,
     fb: IFeedback = NoFeedback,
+    preview: bool = False,
 ) -> list[Any]:
     """Run multiple tasks concurrently, dispatching based on parameter types.
 
@@ -169,6 +170,8 @@ async def run_tasks(
         context: The context providing connector and org_id
         parameters: List of parameter objects (can be mixed types)
         fb: Feedback interface for progress updates
+        preview: If True, sets the ``API-Preview: opt-in`` header on requests.
+            Required for tasks that are still in preview. Defaults to False.
 
     Returns:
         List of results in the same order as the input parameters
@@ -181,7 +184,7 @@ async def run_tasks(
         >>> results = await run_tasks(manager, [
         ...     KrigingParameters(...),
         ...     SimulationParameters(...),  # future task type
-        ... ])
+        ... ], preview=True)
     """
     if len(parameters) == 0:
         return []
@@ -198,7 +201,7 @@ async def run_tasks(
     per_task_fb = split_feedback(fb, [1.0] * total)
 
     async def _run_one(i: int, params: Any, runner: RunnerFunc) -> tuple[int, Any]:
-        result = await runner(context, params)
+        result = await runner(context, params, preview=preview)
         return i, result
 
     tasks = [

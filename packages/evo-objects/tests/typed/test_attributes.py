@@ -61,7 +61,6 @@ class TestPendingAttribute(TestCase):
         pending = PendingAttribute(None, "test_attr")
         self.assertFalse(pending.exists)
 
-
     def test_pending_attribute_repr(self):
         """Test that PendingAttribute has a useful repr."""
         pending = PendingAttribute(None, "test_attr")

@@ -28,7 +28,7 @@ Example:
     ...         max_samples=20,
     ...     ),
     ... )
-    >>> result = await run(manager, params)
+    >>> result = await run(manager, params, preview=True)
 """
 
 from __future__ import annotations
@@ -380,8 +380,6 @@ class KrigingParameters:
         return result
 
 
-
-
 # =============================================================================
 # Kriging Result Types
 # =============================================================================
@@ -637,6 +635,7 @@ async def _run_single_kriging(
     context: IContext,
     parameters: KrigingParameters,
     *,
+    preview: bool = False,
     polling_interval_seconds: float = 0.5,
     retry: Retry | None = None,
     fb: IFeedback = NoFeedback,
@@ -645,10 +644,11 @@ async def _run_single_kriging(
     connector = context.get_connector()
     org_id = context.get_org_id()
 
-    # Add API-Preview header for preview API
-    if connector._additional_headers is None:
-        connector._additional_headers = {}
-    connector._additional_headers["API-Preview"] = "opt-in"
+    # Add API-Preview header when the caller has opted into preview APIs
+    if preview:
+        if connector._additional_headers is None:
+            connector._additional_headers = {}
+        connector._additional_headers["API-Preview"] = "opt-in"
 
     params_dict = parameters.to_dict()
 
@@ -675,13 +675,18 @@ async def _run_single_kriging(
     return result
 
 
-async def _run_kriging_for_registry(context: IContext, parameters: KrigingParameters) -> KrigingResult:
+async def _run_kriging_for_registry(
+    context: IContext,
+    parameters: KrigingParameters,
+    *,
+    preview: bool = False,
+) -> KrigingResult:
     """Simplified runner function for task registry (no extra options).
 
     This is the function registered with the TaskRegistry. For more control
     over polling and retry behavior, use the full `run()` function.
     """
-    return await _run_single_kriging(context, parameters)
+    return await _run_single_kriging(context, parameters, preview=preview)
 
 
 # Register kriging task runner with the task registry

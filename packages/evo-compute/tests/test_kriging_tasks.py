@@ -103,7 +103,9 @@ class TestAttributeAdapters(TestCase):
     # ---- get_attribute_expression ----
 
     def test_expression_for_attribute_with_schema_path(self):
-        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/obj", schema_path="locations.attributes")
+        attr = _create_mock_source_attribute(
+            "grade", "abc-key", "https://example.com/obj", schema_path="locations.attributes"
+        )
         result = get_attribute_expression(attr)
         self.assertEqual(result, "locations.attributes[?key=='abc-key']")
 
@@ -134,7 +136,9 @@ class TestAttributeAdapters(TestCase):
     # ---- source_from_attribute ----
 
     def test_source_from_existing_attribute(self):
-        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/pointset", schema_path="locations.attributes")
+        attr = _create_mock_source_attribute(
+            "grade", "abc-key", "https://example.com/pointset", schema_path="locations.attributes"
+        )
         result = source_from_attribute(attr)
         self.assertIsInstance(result, Source)
         result_dict = result.to_dict()
@@ -165,7 +169,9 @@ class TestAttributeAdapters(TestCase):
     # ---- target_from_attribute ----
 
     def test_target_from_existing_attribute(self):
-        attr = _create_mock_source_attribute("grade", "abc-key", "https://example.com/obj", schema_path="locations.attributes")
+        attr = _create_mock_source_attribute(
+            "grade", "abc-key", "https://example.com/obj", schema_path="locations.attributes"
+        )
         result = target_from_attribute(attr)
         self.assertIsInstance(result, Target)
         result_dict = result.to_dict()

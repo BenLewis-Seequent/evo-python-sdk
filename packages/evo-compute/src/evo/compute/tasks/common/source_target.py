@@ -50,7 +50,9 @@ def is_typed_attribute(value: Any) -> bool:
     return isinstance(value, TYPED_ATTRIBUTE_TYPES)
 
 
-def get_attribute_expression(attr: Attribute | PendingAttribute | BlockModelAttribute | BlockModelPendingAttribute) -> str:
+def get_attribute_expression(
+    attr: Attribute | PendingAttribute | BlockModelAttribute | BlockModelPendingAttribute,
+) -> str:
     """Get the JMESPath expression to access an attribute from its parent object.
 
     For ``Attribute`` (existing, from a DownloadedObject): uses the schema path context
@@ -262,10 +264,7 @@ def source_from_attribute(attr: Attribute) -> Source:
         TypeError: If *attr* is not an ``Attribute`` instance.
     """
     if not isinstance(attr, Attribute):
-        raise TypeError(
-            f"Only Attribute (from a DownloadedObject) can be used as a source, "
-            f"got {type(attr).__name__}"
-        )
+        raise TypeError(f"Only Attribute (from a DownloadedObject) can be used as a source, got {type(attr).__name__}")
 
     return Source(
         object=str(attr._obj.metadata.url),
@@ -315,5 +314,3 @@ def target_from_attribute(
         attr_spec = CreateAttribute(name=attr.name)
 
     return Target(object=attr._obj, attribute=attr_spec)
-
-
