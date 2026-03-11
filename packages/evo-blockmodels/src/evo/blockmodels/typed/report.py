@@ -90,8 +90,7 @@ class ReportColumnSpec:
         - `Units.TROY_OUNCES` - oz_tr (metal content)
 
     Example:
-        >>> from evo.blockmodels import Units
-        >>> from evo.blockmodels.typed import Aggregation, ReportColumnSpec
+        >>> from evo.blockmodels import Aggregation, ReportColumnSpec, Units
         >>>
         >>> # For grade columns, use MASS_AVERAGE
         >>> grade_col = ReportColumnSpec(

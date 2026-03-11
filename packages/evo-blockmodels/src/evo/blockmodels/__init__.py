@@ -10,16 +10,43 @@
 #  limitations under the License.
 
 from .client import BlockModelAPIClient
-from .typed import BoundingBox, Point3, RegularBlockModel, RegularBlockModelData, Size3d, Size3i, Units, get_available_units
+from .typed import (
+    Aggregation,
+    BoundingBox,
+    MassUnits,
+    Point3,
+    RegularBlockModel,
+    RegularBlockModelData,
+    Report,
+    ReportCategorySpec,
+    ReportColumnSpec,
+    ReportResult,
+    ReportSpecificationData,
+    Size3d,
+    Size3i,
+    UnitInfo,
+    Units,
+    UnitType,
+    get_available_units,
+)
 
 __all__ = [
+    "Aggregation",
     "BlockModelAPIClient",
     "BoundingBox",
+    "MassUnits",
     "Point3",
     "RegularBlockModel",
     "RegularBlockModelData",
+    "Report",
+    "ReportCategorySpec",
+    "ReportColumnSpec",
+    "ReportResult",
+    "ReportSpecificationData",
     "Size3d",
     "Size3i",
+    "UnitInfo",
     "Units",
+    "UnitType",
     "get_available_units",
 ]
